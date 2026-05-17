@@ -12,6 +12,14 @@ st.title("🚨 실시간 화재 조기경보 및 통합 관제 플랫폼 '령이
 st.markdown("천리안 2A호 위성(FF/LST) X 기상청 AWS 관측망 X 환경부 환경영향평가 토지이용정보 API 실시간 융합 엔진")
 st.divider()
 
+# --- 🌟 [💡 KeyError 원천 차단] 최초 세션 상태 안전 기본값 가드 ---
+if 't_val' not in st.session_state: st.session_state['t_val'] = 18.0
+if 'h_val' not in st.session_state: st.session_state['h_val'] = 50.0
+if 'w_val' not in st.session_state: st.session_state['w_val'] = 1.5
+if 'obs_time' not in st.session_state: st.session_state['obs_time'] = "실시간 감시 준비 완료"
+if 'live_jimok' not in st.session_state: st.session_state['live_jimok'] = "임야 (산림지역)"
+if 'sat_temp' not in st.session_state: st.session_state['sat_temp'] = 580.0
+
 # --- 💡 기상청 공식 '위도/경도 ➡️ 격자 좌표(X, Y)' 변환 수학 공식 ---
 def convert_to_grid(v1, v2):
     RE = 6371.00877; GRID = 5.0; SLAT1 = 30.0; SLAT2 = 60.0; OLON = 126.0; OLAT = 38.0; XO = 43; YO = 136
@@ -129,6 +137,7 @@ st.sidebar.markdown("---")
 st.sidebar.header("🎛️ 실시간 기상 변수 수동 제어")
 st.sidebar.caption("※ 실시간 위성/기상 수치가 1순위로 자동 세팅되며, 비상 검증 시 아래 슬라이더로 직접 조작이 가능합니다.")
 
+# 💡 안전하게 무조건 초기 보장된 세션 상태 변수 매핑 마감
 temperature = st.sidebar.slider("관측 기온 (°C)", min_value=-10.0, max_value=45.0, value=float(st.session_state['t_val']))
 humidity = st.sidebar.slider("대기 상대습도 (%)", min_value=0.0, max_value=100.0, value=float(st.session_state['h_val']))
 wind_speed = st.sidebar.slider("현지 풍속 (m/s)", min_value=0.0, max_value=35.0, value=float(st.session_state['w_val']))
@@ -182,9 +191,6 @@ with col_radar:
 
 with col_status:
     st.subheader("📊 관제 현황 및 최종 판정")
-    
-    # 지목 검증 우회 가동 스위치
-    is_forest = fire_type == "WILDFIRE"
     
     if fire_type == "SAFE" and total_risk >= 75:
         st.info(f"🛑 **[오발동 탐지 차단기 가동]**\n\n현재 수집된 기상 지수가 위험 수치에 도달했으나, 환경부 토지이용 API 교차 검증 결과 해당 좌표의 지목이 **[{st.session_state['live_jimok']}]**으로 확인되었습니다. 아스팔트 복사열에 의한 오탐지로 판단하여 **시스템 경보를 자동 기각**합니다.")
@@ -245,7 +251,7 @@ if total_risk >= 75 and fire_type != "SAFE":
         if fire_type == "WILDFIRE":
             st.error(f"⏱️ **화재 인지 30분 (반경 {spread_speed*30:.1f}m)**\n\n⚠️ **[수관화 전개 경보]** 가파른 경사도 및 유분 인화로 화선 급변침 발생. 확산 예상 경로 주민들에게 **강제 대피 명령 및 재난 문자 자동 살포**.")
         else:
-            st.error(f"⏱️ **화재 인지 30분**\n\n⚠️ **[유독가스 및 인명 고립 경보]** 유독 가스가 하류 도심으로 확산 중입니다. 인근 빌딩 공조 시스템 전면 차단 및 **반경 1km 이내 유동 인구 우회 강제 대피령 문자를 즉각 살포**하십시오.")
+            st.error(f"⏱️ **화재 인지 30분**\n\n⚠️ **[유독가스 및 인명 고립 경보]** 유독 가스가 하류 도심으로 확산 중입니다. 인근 빌딩 공조 시스템 전면 차단 및 **반경 1km 이내 유동 인구 우회 강제 대피령 문자가 즉각 살포**하십시오.")
             
     with col3:
         st.error(f"⏱️ **화재 인지 60분**\n\n🧑‍🚒 인근 지자체 소방력 총동원 광역 대응 단계 자동 격상. 소방 용수 공급선(소화전) 추가 확보 및 민가/주요 인프라 방어벽 최종 고착.")
