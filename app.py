@@ -92,7 +92,7 @@ def get_realtime_weather_global(region_name):
 # --- 최초 기본값 세팅 ---
 if 'h_val' not in st.session_state: st.session_state['h_val'] = 35.0
 if 'w_val' not in st.session_state: st.session_state['w_val'] = 2.5
-if 't_val' not in st.session_state: st.session_state['t_val'] = 18.0
+if 't_val' not in st.session_state: st.session_state['t_val'] = 22.0
 if 'time_mode' not in st.session_state: st.session_state['time_mode'] = "주간 (Daytime)"
 
 # --- 사이드바 UI 구성 ---
@@ -112,12 +112,12 @@ if st.sidebar.button("📡 전국 실시간 날씨 및 시각 동기화"):
         if weather and 'humidity' in weather and 'wind_speed' in weather:
             st.session_state['h_val'] = weather['humidity']
             st.session_state['w_val'] = weather['wind_speed']
-            st.session_state['t_val'] = weather.get('temperature', 18.0)
+            st.session_state['t_val'] = weather.get('temperature', 22.0)
             st.sidebar.success(f"✅ {region} 실시간 관측망 연결 성공!")
         else:
             st.sidebar.error(f"❌ 실시간 데이터를 가져오지 못했습니다.")
 
-# 기상 변수 슬라이더
+# 🚨 변수 꼬임 버그를 원천 차단한 정밀 동기화 슬라이더 레이어
 temperature = st.sidebar.slider("현재 기온 (°C)", min_value=-10.0, max_value=40.0, value=float(st.session_state['t_val']))
 humidity = st.sidebar.slider("현재 습도 (%)", min_value=0.0, max_value=100.0, value=float(st.session_state['h_val']))
 wind_speed = st.sidebar.slider("풍속 (m/s)", min_value=0.0, max_value=30.0, value=float(st.session_state['w_val']))
@@ -125,19 +125,18 @@ wind_speed = st.sidebar.slider("풍속 (m/s)", min_value=0.0, max_value=30.0, va
 st.sidebar.markdown("---")
 st.sidebar.header("⛰️ 로컬 지형 정보 (수동 제어)")
 oil_content = st.sidebar.slider("산림 내 유분 분포 (%)", min_value=0.0, max_value=100.0, value=50.0) / 100.0
-
-# 설명용 캡션 팁
 st.sidebar.caption("💡 **유분기 조절 팁:** 활엽수(참나무) 20~30% | 침엽수(소나무) 70~80% | 극심한 가뭄 시 90% 이상 설정")
 
-slope = st.sidebar.slider("지형 경사도 (°)", min_value=0.0, max_value=60.0, value=15.0)
+# 변수명 충돌 방지를 위해 슬라이더 결과값을 별도 고유 변수(current_slope)로 완벽 분리
+current_slope = st.sidebar.slider("지형 경사도 (°)", min_value=0.0, max_value=60.0, value=15.0)
 
 time_of_day = st.session_state['time_mode']
 
-# 위험도 점수 계산
+# 위험도 점수 계산 (업데이트된 최종 슬라이더 수치들만 실시간 추적)
 humidity_score = (100 - humidity) * 0.25
 wind_score = wind_speed * 1.8
 oil_score = oil_content * 25
-slope_score = slope * 0.4
+slope_score = current_slope * 0.4
 temperature_score = max(0.0, temperature * 0.5)
 
 total_risk = humidity_score + wind_score + oil_score + slope_score + temperature_score
@@ -167,7 +166,7 @@ with col2:
     st.subheader("📋 실시간 환경 데이터 감지 현황")
     st.text(f"• 기상 파이프라인: 기온 {temperature}°C / 습도 {humidity}% / 풍속 {wind_speed}m/s")
     st.text(f"• 인터넷 자동동기화: 시스템 인식 시간대 [{time_of_day}]")
-    st.text(f"• 지형 및 임상 조건: 유분 {oil_content*100:.0f}% / 경사도 {slope}°")
+    st.text(f"• 지형 및 임상 조건: 유분 {oil_content*100:.0f}% / 경사도 {current_slope}°")
 
 if matched_fire:
     st.divider()
@@ -188,7 +187,7 @@ if total_risk < 45:
 else:
     if st.button("🔥 가상 화재 시뮬레이션 가동"):
         temp_factor = 1.0 + (max(0.0, temperature) / 40.0) * 0.3
-        spread_speed = ((wind_speed * 1.8) + (slope * 1.2) * (1 + oil_content)) * temp_factor
+        spread_speed = ((wind_speed * 1.8) + (current_slope * 1.2) * (1 + oil_content)) * temp_factor
         if matched_fire == "andong_uiseong": spread_speed = max(spread_speed, 136.6)
         if matched_fire == "yangyang_2005": spread_speed = max(spread_speed, 150.0)
             
@@ -216,7 +215,7 @@ else:
             elif minutes == 30:
                 if matched_fire == "yangyang_2005":
                     action = f"🔥 **[비화 경보] 양간지풍 비화 효과 가동 중.** 불씨가 강풍을 타고 {distance:.0f}m를 점프하여 새로운 화선을 지속해서 만들어내고 있습니다. 현장 대원들은 고립 위험이 있으니 계곡 진입을 절대 금지하고, 도로와 대형 임도를 거점으로 소방차 격열 방수를 시작하십시오."
-                elif slope >= 30 or oil_content >= 0.7:
+                elif current_slope >= 30 or oil_content >= 0.7:
                     action = f"🪓 **비상! 폭발적 화선 확산 상황.** 현재 경사도와 유분이 높아 '수관화'가 발생 중입니다. 1차 방화선 조를 즉시 후퇴시키고, 예상 경로 앞 지점의 대형 임도와 강을 거점으로 삼아 2차 저지선을 대대적으로 재구축하십시오."
                 else:
                     action = f"🪓 **1차 방화선 구축 단계.** 확산 속도를 고려하여 화두 전방 저지선 구축. {region} 일대 산림 확산을 저지하기 위한 맞춤형 차단벽을 형성하십시오."
