@@ -59,11 +59,11 @@ def get_lat_lon(location_text):
     except: return None, None
     return None, None
 
-# --- 📡 통합 실시간 데이터 패치 엔진 ---
+# --- 📡 통합 실시간 데이터 패치 엔진 (순수 원본 마스터) ---
 def get_realtime_weather_global(region_name):
     API_KEY = "69309efd849de167a2a68e2fc27331c01eb67888d72dd4a740419a33cf7d292e"
     lat, lon = get_lat_lon(region_name)
-    if not lat or not lon: return None, None, None
+    if not lat or not lon: return None, None, None, None
     nx, ny = convert_to_grid(lat, lon)
 
     url = "http://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getUltraSrtNcst"
@@ -96,33 +96,28 @@ def get_realtime_weather_global(region_name):
                         elif item['category'] == 'T1H': weather_info['temperature'] = val
                     
                     if 'humidity' in weather_info and 'wind_speed' in weather_info and 'temperature' in weather_info:
-                        # 🌟 실시간 기상 오차 정밀 보정 알고리즘 가동
-                        current_minute = now.minute
-                        
-                        if 12 <= now.hour <= 18:
-                            minute_factor = (current_minute / 60.0) * 15.0
-                            weather_info['humidity'] = max(25.0, weather_info['humidity'] - minute_factor - 5.0)
-                            weather_info['temperature'] = min(38.0, weather_info['temperature'] + (current_minute / 60.0) * 3.0)
-                        
-                        return weather_info, nx, ny
+                        # 🌟 [보정 전면 철폐] 기상청 관측소가 찍은 팩트 그대로 반환!
+                        obs_time_str = f"{target_time.hour}시 00분"
+                        return weather_info, nx, ny, obs_time_str
         except:
             continue
             
-    return None, nx, ny
+    return None, nx, ny, None
 
 # --- 최초 기본값 세팅 ---
 if 'h_val' not in st.session_state: st.session_state['h_val'] = 35.0
 if 'w_val' not in st.session_state: st.session_state['w_val'] = 2.5
 if 't_val' not in st.session_state: st.session_state['t_val'] = 22.0
 if 'time_mode' not in st.session_state: st.session_state['time_mode'] = "주간 (Daytime)"
+if 'obs_time' not in st.session_state: st.session_state['obs_time'] = "미동기화"
 
 # --- 사이드바 UI 구성 ---
 st.sidebar.header("📡 령이 현장 주소 관제망")
-region = st.sidebar.text_input("발화 현장 상세 주소 입력", value="상주시 만산동")
+region = st.sidebar.text_input("발화 현장 상세 주소 입력", value="안동시 송천동")
 
 if st.sidebar.button("📡 현장 실시간 날씨 및 시각 동기화"):
-    with st.sidebar.spinner(f"🗺️ '{region}' 전국 실시간 기상망 동기화 가동 중..."):
-        weather, calc_x, calc_y = get_realtime_weather_global(region)
+    with st.sidebar.spinner(f"🗺️ '{region}' 기상청 공식 데이터 동기화 중..."):
+        weather, calc_x, calc_y, obs_time_str = get_realtime_weather_global(region)
         
         current_hour = datetime.now().hour
         if 6 <= current_hour < 18:
@@ -134,15 +129,10 @@ if st.sidebar.button("📡 현장 실시간 날씨 및 시각 동기화"):
             st.session_state['h_val'] = weather['humidity']
             st.session_state['w_val'] = weather['wind_speed']
             st.session_state['t_val'] = weather['temperature']
-            st.sidebar.success(f"✅ {region} 실시간 기상 데이터 실시간 보정 동기화 완료!")
+            st.session_state['obs_time'] = obs_time_str
+            st.sidebar.success(f"✅ {region} 기상청 팩트 데이터 연동 완료!")
         else:
-            if "제주" in region:
-                st.session_state['h_val'], st.session_state['w_val'], st.session_state['t_val'] = 32.0, 1.8, 26.5
-            elif "강릉" in region:
-                st.session_state['h_val'], st.session_state['w_val'], st.session_state['t_val'] = 40.0, 5.8, 28.0
-            else:
-                st.session_state['h_val'], st.session_state['w_val'], st.session_state['t_val'] = 29.1, 2.4, 32.5
-            st.sidebar.success(f"✅ {region} 현장 실시간 기상 데이터 분석 동기화 완료!")
+            st.sidebar.error("❌ 기상청 오픈 API 통신 장애가 발생했습니다. 잠시 후 다시 시도해 주세요.")
 
 # 슬라이더 세팅
 temperature = st.sidebar.slider("현재 기온 (°C)", min_value=-10.0, max_value=40.0, value=float(st.session_state['t_val']))
@@ -190,8 +180,9 @@ with col1:
 
 with col2:
     st.subheader("📋 실시간 환경 데이터 감지 현황")
-    st.text(f"• 기상 파이프라인 (정밀 보정): 기온 {temperature:.1f}°C / 습도 {humidity:.1f}% / 풍속 {wind_speed:.1f}m/s")
-    st.text(f"• 인터넷 자동동기화: 시스템 인식 시간대 [{time_of_day}]")
+    st.text(f"• 기상 파이프라인: 기온 {temperature:.1f}°C / 습도 {humidity:.1f}% / 풍속 {wind_speed:.1f}m/s")
+    st.info(f"⏰ 기상청 실제 관측 시각: [{st.session_state['obs_time']}] 수집 데이터")
+    st.caption("⚠️ 기상청 오픈 API 특성상 팩트 데이터는 1시간 전 정각 관측치가 최신으로 배달되므로, 실시간 예측 보정치를 사용하는 포털 날씨와 수치 차이가 발생할 수 있습니다. (정상 가동 중)")
     st.text(f"• 지형 및 임상 조건: 유분 {oil_content*100:.0f}% / 경사도 {current_slope}°")
 
 if matched_fire:
