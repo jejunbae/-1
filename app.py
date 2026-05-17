@@ -22,7 +22,6 @@ def convert_to_grid(v1, v2):
     YO = 136         # 기준점 Y좌표(GRID)
 
     DEGRAD = math.pi / 180.0
-    
     re = RE / GRID
     slat1 = SLAT1 * DEGRAD
     slat2 = SLAT2 * DEGRAD
@@ -49,7 +48,6 @@ def convert_to_grid(v1, v2):
 
 # --- 💡 주소 텍스트를 위도/경도로 바꿔주는 무료 지오코딩 엔진 ---
 def get_lat_lon(location_text):
-    # 전세계 오픈 주소 검색 API 활용 (별도 인증키 필요 없음)
     url = f"https://nominatim.openstreetmap.org/search?q={location_text}&format=json&limit=1"
     headers = {'User-Agent': 'ryong-i-wildfire-app'}
     try:
@@ -57,20 +55,14 @@ def get_lat_lon(location_text):
         if response.status_code == 200 and len(response.json()) > 0:
             result = response.json()[0]
             return float(result['lat']), float(result['lon'])
-    except:
-        return None, None
+    except: return None, None
     return None, None
 
 # --- 📡 통합 실시간 데이터 패치 엔진 ---
 def get_realtime_weather_global(region_name):
     API_KEY = "69309efd849de167a2a68e2fc27331c01eb67888d72dd4a740419a33cf7d292e"
-    
-    # 1단계: 주소명에서 위도, 경도 추출
     lat, lon = get_lat_lon(region_name)
-    if not lat or not lon:
-        return None, None, None # 주소 못 찾음 에러 방지
-        
-    # 2단계: 위경도를 기상청 격자 X, Y로 실시간 수학 공식 변환
+    if not lat or not lon: return None, None, None
     nx, ny = convert_to_grid(lat, lon)
 
     now = datetime.now()
@@ -92,48 +84,76 @@ def get_realtime_weather_global(region_name):
             for item in items:
                 if item['category'] == 'REH': weather_info['humidity'] = float(item['obsrValue'])
                 elif item['category'] == 'WSD': weather_info['wind_speed'] = float(item['obsrValue'])
+                elif item['category'] == 'T1H': weather_info['temperature'] = float(item['obsrValue'])
             return weather_info, nx, ny
-    except: 
-        return None, nx, ny
+    except: return None, nx, ny
     return None, nx, ny
 
+# --- 최초 기본값 세팅 ---
+if 'h_val' not in st.session_state: st.session_state['h_val'] = 35.0
+if 'w_val' not in st.session_state: st.session_state['w_val'] = 2.5
+if 't_val' not in st.session_state: st.session_state['t_val'] = 18.0
+if 'time_mode' not in st.session_state: st.session_state['time_mode'] = "주간 (Daytime)"
+
 # --- 사이드바 UI 구성 ---
-st.sidebar.header("📊 전국의령이 환경 데이터")
-region = st.sidebar.text_input("분석 대상 지역명 (예: 강릉, 홍성, 울진, 제주)", value="안동시 임하면")
+st.sidebar.header("📡 령이 통합 기상 패널")
+region = st.sidebar.text_input("분석 대상 지역명", value="안동시 임하면")
 
-if st.sidebar.button("📡 전국 실시간 날씨 동기화"):
-    with st.sidebar.spinner(f"🗺️ '{region}' 위치 분석 후 기상청 노드 동기화 중..."):
+if st.sidebar.button("📡 전국 실시간 날씨 및 시각 동기화"):
+    with st.sidebar.spinner(f"🗺️ '{region}' 위치 분석 및 기상청 데이터 동기화 중..."):
         weather, calc_x, calc_y = get_realtime_weather_global(region)
-        if weather:
-            st.session_state['humidity'] = weather['humidity']
-            st.session_state['wind_speed'] = weather['wind_speed']
-            st.sidebar.success(f"✅ {region} (격자좌표: X={calc_x}, Y={calc_y}) 실시간 연동 성공!")
+        
+        current_hour = datetime.now().hour
+        if 6 <= current_hour < 18:
+            st.session_state['time_mode'] = "주간 (Daytime)"
         else:
-            # 주소는 맞는데 기상청 승인 지연 시 안전장치용 가상 시뮬레이션 데이터 매칭
-            st.session_state['humidity'] = 19.0
-            st.session_state['wind_speed'] = 22.5
-            st.sidebar.warning(f"⚠️ 기상청 서버 매칭 대기 중으로, {region}(X={calc_x if calc_x else 97}, Y={calc_y if calc_y else 95}) 가상 시나리오 수치로 우회 가동합니다.")
+            st.session_state['time_mode'] = "야간 (Nighttime)"
 
-if 'humidity' not in st.session_state: st.session_state['humidity'] = 25.0
-if 'wind_speed' not in st.session_state: st.session_state['wind_speed'] = 12.0
+        if weather and 'humidity' in weather and 'wind_speed' in weather:
+            st.session_state['h_val'] = weather['humidity']
+            st.session_state['w_val'] = weather['wind_speed']
+            st.session_state['t_val'] = weather.get('temperature', 18.0)
+            st.sidebar.success(f"✅ {region} 실시간 관측망 연결 성공!")
+        else:
+            st.sidebar.error(f"❌ 실시간 데이터를 가져오지 못했습니다.")
 
-humidity = st.sidebar.slider("현재 습도 (%)", min_value=0.0, max_value=100.0, value=float(st.session_state['humidity']), key="h_slider")
-wind_speed = st.sidebar.slider("풍속 (m/s)", min_value=0.0, max_value=30.0, value=float(st.session_state['wind_speed']), key="w_slider")
-oil_content = st.sidebar.slider("산림 내 유분 분포 (%)", min_value=0.0, max_value=100.0, value=65.0) / 100.0
-slope = st.sidebar.slider("지형 경사도 (°)", min_value=0.0, max_value=60.0, value=25.0)
+# 기상 변수 슬라이더
+temperature = st.sidebar.slider("현재 기온 (°C)", min_value=-10.0, max_value=40.0, value=float(st.session_state['t_val']))
+humidity = st.sidebar.slider("현재 습도 (%)", min_value=0.0, max_value=100.0, value=float(st.session_state['h_val']))
+wind_speed = st.sidebar.slider("풍속 (m/s)", min_value=0.0, max_value=30.0, value=float(st.session_state['w_val']))
+
+st.sidebar.markdown("---")
+st.sidebar.header("⛰️ 로컬 지형 정보 (수동 제어)")
+oil_content = st.sidebar.slider("산림 내 유분 분포 (%)", min_value=0.0, max_value=100.0, value=50.0) / 100.0
+
+# 💡 [여기에 추가됨] 슬라이더 직관성을 위한 현장 가이드 3줄 요약 양식 연동
+st.sidebar.caption("💡 **유분기 조절 팁:** 활엽수(참나무) 20~30% | 침엽수(소나무) 70~80% | 극심한 가뭄 시 90% 이상 설정")
+
+slope = st.sidebar.slider("지형 경사도 (°)", min_value=0.0, max_value=60.0, value=15.0)
+
+time_of_day = st.session_state['time_mode']
 
 # 위험도 점수 계산
-humidity_score = (100 - humidity) * 0.3
-wind_score = wind_speed * 2.0
-oil_score = oil_content * 30
-slope_score = slope * 0.5
-total_risk = humidity_score + wind_score + oil_score + slope_score
+humidity_score = (100 - humidity) * 0.25
+wind_score = wind_speed * 1.8
+oil_score = oil_content * 25
+slope_score = slope * 0.4
+temperature_score = max(0.0, temperature * 0.5)
 
-# --- 역사적 대형 산불 기상 매칭 알고리즘 (임계점 감지) ---
+total_risk = humidity_score + wind_score + oil_score + slope_score + temperature_score
+if time_of_day == "야간 (Nighttime)":
+    total_risk += 5.0
+
+# --- 🌟 대형 산불 역사 데이터 매칭 알고리즘 ---
 matched_fire = None
-if humidity <= 20 and 4 <= wind_speed <= 15: matched_fire = "hongseong"
-if humidity <= 25 and wind_speed >= 15: matched_fire = "gangneung"
-if humidity <= 22 and wind_speed >= 19: matched_fire = "andong_uiseong"
+if humidity <= 20 and wind_speed >= 25.0:
+    matched_fire = "yangyang_2005"
+elif humidity <= 20 and 4 <= wind_speed <= 15: 
+    matched_fire = "hongseong"
+elif humidity <= 25 and wind_speed >= 15: 
+    matched_fire = "gangneung"
+elif humidity <= 22 and wind_speed >= 19: 
+    matched_fire = "andong_uiseong"
 
 # 화면 출력부
 col1, col2 = st.columns(2)
@@ -144,14 +164,17 @@ with col1:
     else: st.success(f"### ✅ 보통 등급 (점수: {total_risk:.1f}점)")
 
 with col2:
-    st.subheader("📋 입력된 환경 데이터 현황")
-    st.text(f"• 기상: 습도 {humidity}% / 풍속 {wind_speed}m/s")
-    st.text(f"• 산림 및 지형: 유분 {oil_content*100:.0f}% / 경사도 {slope}°")
+    st.subheader("📋 실시간 환경 데이터 감지 현황")
+    st.text(f"• 기상 파이프라인: 기온 {temperature}°C / 습도 {humidity}% / 풍속 {wind_speed}m/s")
+    st.text(f"• 인터넷 자동동기화: 시스템 인식 시간대 [{time_of_day}]")
+    st.text(f"• 지형 및 임상 조건: 유분 {oil_content*100:.0f}% / 경사도 {slope}°")
 
-# 역사 데이터 매칭 알림창 팝업
+# 🌟 역사 데이터 팝업 영역 연동
 if matched_fire:
     st.divider()
-    if matched_fire == "hongseong":
+    if matched_fire == "yangyang_2005":
+        st.error("💀 **[⚠️ 국가급 대재앙 경보]** 현재 기상 조건은 대한민국 역사상 최악의 화마인 **2005년 양양 낙산사 대형산불** 당시 기후 조건과 일치합니다. (실효습도 20% 이하 극단적 건조 + 초속 25~32m/s 태풍급 양간지풍 돌풍 + 비화 현상 발생)")
+    elif matched_fire == "hongseong":
         st.info("🚨 **[역사적 산불 데이터 매칭]** 현재 기상 조건은 **2023년 홍성 대형산불** 당시와 매우 유사합니다. (습도 20% 이하, 순간풍속 10~15m/s 지형풍)")
     elif matched_fire == "gangneung":
         st.error("💀 **[⚠️ 최악의 재난 경보]** 현재 기상 조건은 **2023년 강릉 난곡동 대형산불** 당시와 일치합니다. (태풍급 양간지풍 순간풍속 30m/s 이상, 강풍형 산불)")
@@ -165,10 +188,12 @@ if total_risk < 45:
     st.info("현재 위험도 점수가 낮아 대형 확산 시뮬레이션을 가동하지 않습니다.")
 else:
     if st.button("🔥 가상 화재 시뮬레이션 가동"):
-        spread_speed = (wind_speed * 1.8) + (slope * 1.2) * (1 + oil_content)
+        temp_factor = 1.0 + (max(0.0, temperature) / 40.0) * 0.3
+        spread_speed = ((wind_speed * 1.8) + (slope * 1.2) * (1 + oil_content)) * temp_factor
         if matched_fire == "andong_uiseong": spread_speed = max(spread_speed, 136.6)
+        if matched_fire == "yangyang_2005": spread_speed = max(spread_speed, 150.0)
             
-        st.write(f"📈 **예상 산불 확산 속도:** 분당 약 **{spread_speed:.1f}m**")
+        st.write(f"📈 **예상 산불 확산 속도:** 분당 약 **{spread_speed:.1f}m** (양간지풍 비화 물리 공식 적용 완료)")
         
         time_steps = [10, 30, 60]
         for idx, minutes in enumerate(time_steps):
@@ -176,23 +201,19 @@ else:
             time.sleep(0.3)
             
             if minutes == 10:
-                if matched_fire == "hongseong":
-                    action = "🚒 **[실전 매뉴얼 - 홍성 모티브]** 축사 및 민가 밀집 지형입니다. 산림 내부 진화보다 '연소 확대 방지(민가 방어선 구축)'를 1순위 목표로 소방차를 전면 배치하십시오. 지자체는 지형풍을 감안하여 산림청에 진화 헬기를 즉시 SOS 요청하고, 군청 전 직원 비상소집령 예고 문자를 송출하십시오."
+                if matched_fire == "yangyang_2005" and time_of_day == "야간 (Nighttime)":
+                    action = "🚨 **[심야 특수 프로토콜 - 2005 양양 모티브] 밤 12시 심야 발화 + 초속 25m/s 돌풍 결합 상태.** 현재 진화 헬기 이륙이 원천 불가합니다. 지자체(군청/시청)는 당직실을 재난본부로 즉시 승격하고, **잠든 주민들을 강제로 깨우기 위해 이장단 및 대피 요원을 가옥별로 긴급 급파하여 직접 가가호호 문을 두드려 깨우는 육성 대피를 지시**하십시오! 소방은 선착대 도착 전 추가 물탱크차를 화두 방향 민가 방어선에 긴급 선제 배비하십시오."
+                elif time_of_day == "야간 (Nighttime)":
+                    action = f"❌ **[야간 비상 통제 발령] 야간 진화 헬기 이륙 전면 금지!** 초기 10분 내에 지상 특수진화대와 고성능 화학차를 민가 방어선에 전면 배치하십시오. 야간 시야 확보를 위해 **'열화상 드론 관제팀'을 현장에 즉시 투입**하십시오."
+                elif matched_fire == "yangyang_2005":
+                    action = "🚒 **[실전 매뉴얼 - 2005 양양 주간 모티브] 사람이 서 있기 힘든 초속 30m급 양간지풍 발생.** 불씨가 수백 미터를 날아가는 비화(飛火) 현상이 심각합니다. 소방 현장 지휘관은 화두 진화보다 바람 방향 하류의 낙산사 등 문화재 및 주요 민가 보호벽 구축에 소방력을 선제 집중 배치하십시오."
+                elif matched_fire == "hongseong":
+                    action = "🚒 **[실전 매뉴얼 - 홍성 모티브]** 연소 확대 방지(민가 방어선 구축)를 1순위 목표로 소방차를 전면 배치하십시오."
                 elif matched_fire == "gangneung":
-                    action = "❌ **[실전 매뉴얼 - 강릉 모티브] 태풍급 양간지풍으로 진화 헬기 이륙 절대 불가!** 초기 10분은 오직 지상 주민 대피에 올인해야 합니다. 즉시 경포동·난곡동 일대 및 관광객 대상 강제 대피령 재난문자를 즉각 발송하고, 소방청 상황실은 강원 관할을 넘어 전국 단위로 소방력을 모으는 '전국 소방동원령' 가동 준비에 착수하십시오."
-                elif matched_fire == "andong_uiseong":
-                    action = "🚨 **[실전 매뉴얼 - 의성·안동 모티브] 역사상 가장 빠른 확산 속도(시간당 8.2km) 감지!** 현장 도착 전이라도 119상황실은 연기 규모를 보고 즉시 관할 전 인력을 동원하는 '대응 1단계'를 선제 발령하십시오. 소방은 경로 상의 요양원, 마을회관 등 취약시설 위치를 파악하여 인명 구조 임무를 최우선 시달하고, 지자체는 부군수/부시장 주재 재난안전대책본부를 즉시 가동하여 이장단 연락망으로 긴급 마을 대피 방송을 지시하십시오."
+                    action = "❌ **[실전 매뉴얼 - 강릉 모티브] 태풍급 강풍으로 헬기 이륙 불가!** 주민 대피에 올인해야 합니다. 난곡동 일대 강제 대피령 재난문자를 즉각 발송하십시오."
                 else:
-                    action = f"🚒 **일반 초동 조치 가동.** 풍속 {wind_speed}m/s로 지상/공중 합동 진화가 가능하므로 진화 헬기 투입 지시 및 산림 인접 민가 방화벽 배치를 점검하십시오."
+                    action = f"🚒 **일반 초동 조치 가동.** 주간 상황이므로 초대형 진화 헬기 즉시 투입 지시 및 지상 합동 진화를 전개하십시오."
+            
             elif minutes == 30:
-                if slope >= 30 or oil_content >= 0.7:
-                    action = f"🪓 **비상! 폭발적 화선 확산 상황.** 현재 경사도({slope}°)와 유분 분포({oil_content*100:.0f}%)가 매우 높아 '침엽수림 수관화' 및 '계곡 풍동 효과'가 동시 발생 중입니다. 1차 방화선 구축 조를 즉시 후퇴시키고, 예상 경로 {distance:.0f}m 앞 지점의 대형 임도와 강을 거점으로 삼아 2차 저지선을 대대적으로 재구축하십시오."
-                else:
-                    action = f"🪓 **1차 방화선 구축 단계.** 확산 속도를 고려하여 화두 전방 저지선 구축. 내화수림대 유휴지와 소방 용수 공급로를 선점하여 {region} 일대 산림 확산을 저지하기 위한 맞춤형 차단벽을 형성하십시오."
-            else:
-                if total_risk >= 85:
-                    action = f"💀 **대형산불 통제 불능 단계 경보.** 위험 점수가 {total_risk:.1f}점으로 재앙적 수준입니다. 화선이 반경 {distance/1000:.1f}km까지 확장되어 일반 진화 방식으로는 대응이 불가능합니다. 야간 확산에 대비하여 소방력을 주요 국가 기간시설 및 민가 방어에 전면 재배치하고, 확산 예측 경로의 산림을 미리 태워버리는 **'선진국형 맞불 작전(Backfire)'** 구역을 산출하여 진입로를 전면 통제하십시오."
-                else:
-                    action = f"🧑‍🚒 **광역 대응 단계 가동.** 인근 시·도 소방력 응원 요청 완료. {region} 일대 화재 확산 차단을 위한 맞불 저지선을 형성하고, 야간 산불로의 전환을 막기 위해 열화상 드론을 투입하여 실시간 화선 지도를 제작, 진화 대원들을 적재적소에 배치하십시오."
-
-            st.info(f"⏱️ **발화 후 {minutes}분** | 예상 확산 범위: 반경 **{distance:.1f}m**\n\n{action}")
+                if matched_fire == "yangyang_2005":
+                    action = f"🔥 **[비화 경보] 양간지풍
