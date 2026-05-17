@@ -10,6 +10,34 @@ st.title("🌲 산불 예방 및 대응 예측 AI '령이' (RYEONG-I)")
 st.markdown("선진국 대형산불 대응 사례 모티브 및 대한민국 대형산불 역사 데이터 기반 예측 시스템")
 st.divider()
 
+# --- 💡 풍향 각도(0~360)를 8방위 텍스트로 변환하는 함수 ---
+def get_wind_direction_text(deg):
+    if deg is None: return "미감지"
+    deg = float(deg)
+    if (337.5 <= deg <= 360) or (0 <= deg < 22.5): return "북풍 (N)"
+    elif 22.5 <= deg < 67.5: return "북동풍 (NE)"
+    elif 67.5 <= deg < 112.5: return "동풍 (E)"
+    elif 112.5 <= deg < 157.5: return "남동풍 (SE)"
+    elif 157.5 <= deg < 202.5: return "남풍 (S)"
+    elif 202.5 <= deg < 247.5: return "남서풍 (SW)"
+    elif 247.5 <= deg < 292.5: return "서풍 (W)"
+    elif 292.5 <= deg < 337.5: return "북서풍 (NW)"
+    return "유동풍"
+
+# --- 💡 풍향에 따른 불의 진행 방향(화두) 계산 함수 ---
+def get_fire_spread_direction(deg):
+    if deg is None: return "예측불가"
+    deg = (float(deg) + 180) % 360  # 불은 바람의 반대(하류) 방향으로 진행
+    if (337.5 <= deg <= 360) or (0 <= deg < 22.5): return "북쪽 (North)"
+    elif 22.5 <= deg < 67.5: return "북동쪽 (Northeast)"
+    elif 67.5 <= deg < 112.5: return "동쪽 (East)"
+    elif 112.5 <= deg < 157.5: return "남동쪽 (Southeast)"
+    elif 157.5 <= deg < 202.5: return "남쪽 (South)"
+    elif 202.5 <= deg < 247.5: return "남서쪽 (Southwest)"
+    elif 247.5 <= deg < 292.5: return "서쪽 (West)"
+    elif 292.5 <= deg < 337.5: return "북서쪽 (Northwest)"
+    return "확산 예측 지연"
+
 # --- 💡 기상청 공식 '위도/경도 ➡️ 격자 좌표(X, Y)' 변환 수학 공식 ---
 def convert_to_grid(v1, v2):
     RE = 6371.00877  # 지구 반경(km)
@@ -87,7 +115,7 @@ def get_realtime_weather_global(region_name):
                 data = response.json()
                 if 'response' in data and 'body' in data['response'] and data['response']['body'] is not None:
                     items = data['response']['body']['items']['item']
-                    weather_info = {}
+                    weather_info = {'wind_deg': 180.0} # 기본값 남풍 세팅
                     for item in items:
                         val = float(item['obsrValue'])
                         if val < -50 or val == -900: continue 
@@ -95,6 +123,7 @@ def get_realtime_weather_global(region_name):
                         if item['category'] == 'REH': weather_info['humidity'] = val
                         elif item['category'] == 'WSD': weather_info['wind_speed'] = val
                         elif item['category'] == 'T1H': weather_info['temperature'] = val
+                        elif item['category'] == 'VEC': weather_info['wind_deg'] = val # 🌟 풍향 데이터 수집
                     
                     if 'humidity' in weather_info and 'wind_speed' in weather_info and 'temperature' in weather_info:
                         obs_time_str = f"{target_time.hour}시 00분"
@@ -108,6 +137,7 @@ def get_realtime_weather_global(region_name):
 if 'h_val' not in st.session_state: st.session_state['h_val'] = 35.0
 if 'w_val' not in st.session_state: st.session_state['w_val'] = 2.5
 if 't_val' not in st.session_state: st.session_state['t_val'] = 22.0
+if 'wd_deg' not in st.session_state: st.session_state['wd_deg'] = 180.0
 if 'time_mode' not in st.session_state: st.session_state['time_mode'] = "주간 (Daytime)"
 if 'obs_time' not in st.session_state: st.session_state['obs_time'] = "미동기화"
 
@@ -130,6 +160,7 @@ if st.sidebar.button("📡 현장 실시간 날씨 및 시각 동기화"):
             st.session_state['h_val'] = weather['humidity']
             st.session_state['w_val'] = weather['wind_speed']
             st.session_state['t_val'] = weather['temperature']
+            st.session_state['wd_deg'] = weather['wind_deg']
             st.session_state['obs_time'] = obs_time_str
             st.sidebar.success(f"✅ {region} 기상청 팩트 데이터 연동 완료!")
         else:
@@ -139,6 +170,12 @@ if st.sidebar.button("📡 현장 실시간 날씨 및 시각 동기화"):
 temperature = st.sidebar.slider("현재 기온 (°C)", min_value=-10.0, max_value=40.0, value=float(st.session_state['t_val']))
 humidity = st.sidebar.slider("현재 습도 (%)", min_value=0.0, max_value=100.0, value=float(st.session_state['h_val']))
 wind_speed = st.sidebar.slider("풍속 (m/s)", min_value=0.0, max_value=30.0, value=float(st.session_state['w_val']))
+
+# 🌟 풍향 제어 슬라이더 추가 (각도 기준)
+wind_deg = st.sidebar.slider("풍향 각도 (도, °)", min_value=0.0, max_value=360.0, value=float(st.session_state['wd_deg']))
+wind_dir_text = get_wind_direction_text(wind_deg)
+fire_dir_text = get_fire_spread_direction(wind_deg)
+st.sidebar.caption(f"🧭 감지된 기류: **{wind_dir_text}** ➡️ 화선 이동: **{fire_dir_text}**")
 
 st.sidebar.markdown("---")
 st.sidebar.header("⛰️ 로컬 지형 정보 (수동 제어)")
@@ -160,7 +197,7 @@ total_risk = humidity_score + wind_score + oil_score + slope_score + temperature
 if time_of_day == "야간 (Nighttime)":
     total_risk += 5.0
 
-# --- 💡 역사적 대형 산불 기상 매칭 알고리즘 ---
+# --- 역사적 대형 산불 기상 매칭 알고리즘 ---
 matched_fire = None
 if humidity <= 20 and wind_speed >= 25.0:
     matched_fire = "yangyang_2005"
@@ -182,11 +219,12 @@ with col1:
 with col2:
     st.subheader("📋 실시간 환경 데이터 감지 현황")
     st.text(f"• 기상 파이프라인: 기온 {temperature:.1f}°C / 습도 {humidity:.1f}% / 풍속 {wind_speed:.1f}m/s")
-    st.info(f"⏰ 기상청 실제 관측 시각: [{st.session_state['obs_time']}] 수집 데이터")
-    st.caption("⚠️ 기상청 오픈 API 특성상 팩트 데이터는 1시간 전 정각 관측치가 최신으로 배달되므로, 실시간 예측 보정치를 사용하는 포털 날씨와 수치 차이가 발생할 수 있습니다. (정상 가동 중)")
+    # 🌟 대시보드 우측 현황판에 실시간 기류 분석 결과 강제 표출
+    st.info(f"🧭 실시간 기류 관제: [{wind_dir_text}] 유입 중 ➡️ 예상 화두 방향: [{fire_dir_text}] 주 확산")
+    st.text(f"• 기상청 실제 관측 시각: [{st.session_state['obs_time']}] 수집 데이터")
+    st.caption("⚠️ 기상청 오픈 API 특성상 팩트 데이터는 1시간 전 정각 관측치가 최신으로 배달되므로 수치 차이가 발생할 수 있습니다.")
     st.text(f"• 지형 및 임상 조건: 유분 {oil_content*100:.0f}% / 경사도 {current_slope}°")
 
-# 🌟 [제준님 피드백 반영 해골 표기 박멸 및 공식 멘트 교정 완료]
 if matched_fire:
     st.divider()
     if matched_fire == "yangyang_2005":
@@ -211,38 +249,40 @@ else:
         if matched_fire == "yangyang_2005": spread_speed = max(spread_speed, 150.0)
             
         st.write(f"📈 **예상 산불 확산 속도:** 분당 약 **{spread_speed:.1f}m** (양간지풍 비화 물리 공식 적용 완료)")
+        # 🌟 화재 확산 주경로 나침반 나침반 시각 효과 선사
+        st.warning(f"🎯 **[화선 이동 축]** 화재는 현재 바람을 등지고 **[{fire_dir_text}] 방향**으로 전방 화두를 형성해 초고속 돌파 중입니다.")
         
         time_steps = [10, 30, 60]
         for idx, minutes in enumerate(time_steps):
             distance = spread_speed * minutes
             time.sleep(0.3)
             
-            # 🌟 [제준님 피드백 반영] [작성 지역] 주민의 대피 프로토콜과 작전 통제로 명확하게 대수술 완료
+            # 🌟 [제준님 기획 반영] 모든 헬기 및 저지선 명령에 '실시간 연산된 방위'를 완벽 동기화 주입!
             if minutes == 10:
                 if matched_fire == "yangyang_2005" and time_of_day == "야간 (Nighttime)":
-                    action = f"⚠️ **[현장 지휘 통제] 야간 특수 진화 프로토콜 발령.** 진화 헬기 이륙이 전면 불가합니다. [{region}] 재난안전대책본부는 즉시 이장단 및 행정 요원을 소집하고, **[{region}] 관내 전 가구의 문을 직접 두드려 수면 중인 주민들을 전원 깨우는 육성 대피령을 강제 실시**하십시오. 소방은 소방차량 방수포를 이용해 민가 최전방 저지선을 선제 배비하십시오."
+                    action = f"⚠️ **[현장 지휘 통제] 야간 특수 진화 프로토콜 발령.** 진화 헬기 이륙이 전면 불가합니다. [{region}] 재난안전대책본부는 즉시 이장단 및 행정 요원을 소집하고, 불길이 밀려오는 **[{fire_dir_text}] 전방 경계 지구** 전 가구의 문을 직접 두드려 수면 중인 주민들을 전원 깨우는 육성 대피령을 강제 실시하십시오."
                 elif time_of_day == "야간 (Nighttime)":
-                    action = f"❌ **[야간 비상 통제 발령]** 헬기 기동 불가 시간대입니다. [{region}] 현장에 지상 특수진화대 및 고성능 화학차를 즉각 배치하고, 화선 관측을 위한 **'열화상 관제 드론팀'을 [{region}] 야산 지대에 최우선 긴급 투입**하십시오."
+                    action = f"❌ **[야간 비상 통제 발령]** 헬기 기동 불가 시간대입니다. [{region}] 현장에 지상 특수진화대를 배치하고, 화두가 전진 중인 **[{fire_dir_text}] 능선 구역**에 화선 관측을 위한 '열화상 관제 드론팀'을 최우선 긴급 투입하십시오."
                 elif matched_fire == "yangyang_2005":
-                    action = f"🚒 **[현장 지휘 통제] 초속 30m급 돌풍으로 인한 비화(飛火) 차단 단계.** 불씨가 수백 미터를 도약하는 상태입니다. 화두 직접 진화를 전면 중단하고, 바람 방향 하류에 위치한 **[{region}] 내 주요 가옥 및 국가 기간시설 수막 방어선 구축**에 소방력을 긴급 집중 배비하십시오."
+                    action = f"🚒 **[현장 지휘 통제] 초속 30m급 돌풍으로 인한 비화(飛火) 차단 단계.** 불씨가 수백 미터를 도약하는 상태입니다. 화두 직접 진화를 전면 중단하고, 바람 방향 하류인 **[{fire_dir_text}] 방면에 위치한 [{region}] 내 주요 가옥 및 국가 기간시설 수막 방어선 구축**에 소방력을 긴급 집중 배비하십시오."
                 elif matched_fire == "hongseong":
-                    action = f"🚒 **[현장 지휘 통제]** 연소 확대 저지를 위해 소방차량을 강풍 하류 전방에 촘촘히 배치하여 **[{region}] 민가 보호벽 구축을 1순위**로 전개하십시오."
+                    action = f"🚒 **[현장 지휘 통제]** 연소 확대 저지를 위해 소방차량을 강풍 하류 전방에 촘촘히 배치하여 **[{region}] 관내 [{fire_dir_text}] 민가 보호벽 구축을 1순위**로 전개하십시오."
                 elif matched_fire == "gangneung":
-                    action = f"⚠️ **[현장 지휘 통제] 강풍으로 인한 헬기 가동 차단 상황.** 인명 피해 제로를 목표로 설정해야 합니다. **[{region}] 관내 전역에 강제 주민 대피령 재난문자를 즉각 송출**하고 소방대원들은 가옥별 대피 여부를 칼같이 확인하십시오."
+                    action = f"⚠️ **[현장 지휘 통제] 강풍으로 인한 헬기 가동 차단 상황.** 인명 피해 제로를 목표로 설정해야 합니다. 화두가 직격하는 **[{fire_dir_text}] 방면의 주민 대피령 재난문자를 즉각 송출**하고 소방대원들은 가옥별 대피 여부를 칼같이 확인하십시오."
                 else:
-                    action = f"🚒 **[현장 지휘 통제] 초기 대응 단계.** 주간 상황이므로 산림청 및 소방 초대형 진화 헬기를 [{region}] 화두 방향으로 즉시 출격 지시하고 지상 합동 진화 요원을 거점에 전면 투입하십시오."
+                    action = f"🚒 **[현장 지휘 통제] 초기 대응 단계.** 주간 상황이므로 산림청 및 소방 초대형 진화 헬기를 **[{region}]의 화두 방향인 [{fire_dir_text}] 공역**으로 즉시 출격시켜 불머리를 타격(집중 물 투하)하고 지상 합동 진화 요원을 거점에 전면 투입하십시오."
             
             elif minutes == 30:
                 if matched_fire == "yangyang_2005":
-                    action = f"🔥 **[비화 확산 경보]** 강풍형 비화가 동시다발적으로 터지고 있습니다. 현장 진화대원들의 안전 확보를 위해 계곡부 진입을 전면 금지하고, **[{region}] 관내 대형 임도와 주요 간선도로를 최후의 저지 거점**으로 삼아 차량 방수를 개시하십시오."
+                    action = f"🔥 **[비화 확산 경보]** 강풍형 비화가 동시다발적으로 터지고 있습니다. 현장 진화대원들의 안전 확보를 위해 계곡부 진입을 전면 금지하고, 화두 진격로인 **[{region}] 관내 [{fire_dir_text}] 방향 대형 임도와 주요 간선도로**를 최후의 저지 거점으로 삼아 차량 방수를 개시하십시오."
                 elif current_slope >= 30 or oil_content >= 0.7:
-                    action = f"⚠️ **[위험 확산 경보] 폭발적 수관화 발생 상태.** 가파른 경사와 수목 유분으로 인해 화선 제어가 불가능합니다. 1차 저지선을 즉시 해체하고 후퇴시킨 뒤, **[{region}] 예상 확산 경로 하류의 대형 하천 및 임도 구간에 2차 저지선**을 대대적으로 종행 구축하십시오."
+                    action = f"⚠️ **[위험 확산 경보] 폭발적 수관화 발생 상태.** 가파른 경사와 수목 유분으로 인해 화선 제어가 불가능합니다. 1차 저지선을 즉시 해체하고 후퇴시킨 뒤, **[{region}] 기준 [{fire_dir_text}] 예상 확산 경로 하류의 대형 하천 및 임도 구간**에 2차 저지선을 대대적으로 종행 구축하십시오."
                 else:
-                    action = f"🪓 **[방화 저지선 구축]** 확산 속도를 수학적으로 산출하여 화두 전방 저지선 구축. **[{region}] 일대 산림 연소를 차단**하기 위한 방화벽을 견고히 형성하십시오."
+                    action = f"🪓 **[방화 저지선 구축]** 확산 속도를 수학적으로 산출하여 화두 전방 저지선 구축. **[{region}] 기준 [{fire_dir_text}] 일대 산림 연소를 차단**하기 위한 방화벽을 견고히 형성하십시오."
             else:
                 if total_risk >= 85 or matched_fire == "yangyang_2005":
-                    action = f"🚨 **[광역 통제를 위한 비상 대응 단계]** 화선 통제 불능 단계입니다. 인근 시·도 소방력의 총동원령을 유치하고, **[{region}] 확산 예측 경로상의 산림을 미리 연소시켜 불길을 차단하는 '맞불 작전(Backfire)' 구역을 긴급 산출**하여 현장 지휘 통제실에 배포하십시오."
+                    action = f"🚨 **[광역 통제를 위한 비상 대응 단계]** 화선 통제 불능 단계입니다. 인근 시·도 소방력의 총동원령을 유치하고, **[{region}] 화두가 전진 중인 [{fire_dir_text}] 확산 예측 경로상의 산림을 미리 연소시켜 불길을 차단하는 '맞불 작전(Backfire)' 구역을 긴급 산출**하여 현장 지휘 통제실에 배포하십시오."
                 else:
-                    action = f"🧑‍🚒 **[광역 대응 단계 가동]** 인근 지자체 소방력 지원 동원 완료. **[{region}] 외곽 경계 지역의 화재 확산 방지**를 위한 차단벽을 공고히 형성하고 야간 산불 장기화 체제로 전환하십시오."
+                    action = f"🧑‍🚒 **[광역 대응 단계 가동]** 인근 지자체 소방력 지원 동원 완료. **[{region}] 기준 [{fire_dir_text}] 외곽 경계 지역의 화재 확산 방지**를 위한 차단벽을 공고히 형성하고 야간 산불 장기화 체제로 전환하십시오."
 
             st.info(f"⏱️ **발화 후 {minutes}분** | 예상 확산 범위: 반경 **{distance:.1f}m**\n\n{action}")
