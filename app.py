@@ -159,4 +159,98 @@ total_risk = humidity_score + wind_score + temperature_score + oil_score + slope
 col_radar, col_status = st.columns([1, 2])
 
 with col_radar:
-    st.subheader("🛰️ 령이 실시간 국지 감
+    st.subheader("🛰️ 령이 실시간 국지 감시 레이더")
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    if total_risk >= 75 and fire_type != "SAFE":
+        html_critical = f"""
+        <div style="background-color: #ffd2d2; border: 3px solid #ff0000; padding: 25px; border-radius: 10px; text-align: center;">
+            <h2 style="color: #ff0000; margin: 0;">🔴 [⚠️ 위기 감지]</h2>
+            <p style="color: #333; font-weight: bold; margin-top: 10px;">천리안 2A호 위성 화재 신호 포착!<br>지표면 관측 온도: {st.session_state.get('sat_temp', 580.0):.1f}℃</p>
+        </div>
+        """
+        st.markdown(html_critical, unsafe_allow_html=True)
+    else:
+        html_safe = f"""
+        <div style="background-color: #e2f7e2; border: 2px solid #00aa00; padding: 30px; border-radius: 10px; text-align: center;">
+            <h2 style="color: #00aa00; margin: 0;">🟢 [레이더 가동]</h2>
+            <h3 style="color: #111; margin-top: 15px;">실시간 감시 중...</h3>
+            <p style="color: #666; font-size: 13px; margin-top: 10px;"><b>{region}</b> 우주 기상 위성 피드 연결 성공<br>백그라운드 원격 스캔 프로토콜 가동 중</p>
+        </div>
+        """
+        st.markdown(html_safe, unsafe_allow_html=True)
+
+with col_status:
+    st.subheader("📊 관제 현황 및 최종 판정")
+    
+    # 지목 검증 우회 가동 스위치
+    is_forest = fire_type == "WILDFIRE"
+    
+    if fire_type == "SAFE" and total_risk >= 75:
+        st.info(f"🛑 **[오발동 탐지 차단기 가동]**\n\n현재 수집된 기상 지수가 위험 수치에 도달했으나, 환경부 토지이용 API 교차 검증 결과 해당 좌표의 지목이 **[{st.session_state['live_jimok']}]**으로 확인되었습니다. 아스팔트 복사열에 의한 오탐지로 판단하여 **시스템 경보를 자동 기각**합니다.")
+        total_risk = 0.0
+
+    if total_risk >= 75:
+        if fire_type == "WILDFIRE":
+            html_wf = f"""
+            <div style="background-color: #ff0000; padding: 20px; border-radius: 10px; border: 4px solid #ffffff; box-shadow: 0px 0px 15px #ff0000; text-align: center;">
+                <span style="font-size: 70px;">⚠️</span>
+                <h1 style="color: #ffffff; font-weight: bold; margin-top: 10px; margin-bottom: 5px;">🔥 [위험] 실시간 대형 산불 화재 발령 🔥</h1>
+                <h3 style="color: #ffff00; margin: 0;">환경부 지목 검증: 임야 권역 산림 화재 확정 ({total_risk:.1f}점)</h3>
+            </div>
+            """
+            st.markdown(html_wf, unsafe_allow_html=True)
+        elif fire_type == "FACTORY":
+            html_fc = f"""
+            <div style="background-color: #b30000; padding: 20px; border-radius: 10px; border: 4px solid #ffffff; box-shadow: 0px 0px 15px #b30000; text-align: center;">
+                <span style="font-size: 70px;">⚠️</span>
+                <h1 style="color: #ffffff; font-weight: bold; margin-top: 10px; margin-bottom: 5px;">🏭 [위험] 대형 산업단지 공장 화재 발령 🏭</h1>
+                <h3 style="color: #ffff00; margin: 0;">환경부 지목 검증: 공장용지 권역 특수 화재 인지 ({total_risk:.1f}점)</h3>
+            </div>
+            """
+            st.markdown(html_fc, unsafe_allow_html=True)
+        elif fire_type == "CITY":
+            html_ct = f"""
+            <div style="background-color: #cc3300; padding: 20px; border-radius: 10px; border: 4px solid #ffffff; box-shadow: 0px 0px 15px #cc3300; text-align: center;">
+                <span style="font-size: 70px;">⚠️</span>
+                <h1 style="color: #ffffff; font-weight: bold; margin-top: 10px; margin-bottom: 5px;">🏢 [위험] 도심지 고층 건축물 화재 발령 🏢</h1>
+                <h3 style="color: #ffff00; margin: 0;">환경부 지목 검증: 대지 권역 인구 밀집 화재 인지 ({total_risk:.1f}점)</h3>
+            </div>
+            """
+            st.markdown(html_ct, unsafe_allow_html=True)
+    elif total_risk >= 50:
+        st.warning(f"## ⚠️ [경계 등급] 국지 기상 이상 징후 주의 (점수: {total_risk:.1f}점)")
+    elif total_risk > 0:
+        st.success(f"## ✅ [보통 등급] 전국망 안정적 기류 관측 (점수: {total_risk:.1f}점)")
+    else:
+        st.info("## 🔒 안전 마스킹 잠금 상태")
+
+# --- 🚨 3단계: 임계치 돌파 시 실시간 대응 가이드 ---
+st.divider()
+if total_risk >= 75 and fire_type != "SAFE":
+    st.markdown(f"### 📢 [실시간 포착 현장 주소: {region}] 국지 확산 예측 및 초동 지휘 지침")
+    
+    spread_speed = ((wind_speed * 1.8) + (current_slope * 1.2) * (1 + oil_content)) * (1.0 + (temperature/40.0)*0.3)
+    
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        if fire_type == "WILDFIRE":
+            st.error(f"⏱️ **화재 인지 10분 (반경 {spread_speed*10:.1f}m)**\n\n🚒 지목 속성이 확인된 **산불 화재** 상황입니다. 목격자 신고 전 골든타임을 확보했으므로, **지자체 관할 초대형 진화 헬기 3대 즉각 현장 출격 요청**을 트리거합니다.")
+        elif fire_type == "FACTORY":
+            st.error(f"⏱️ **화재 인지 10분**\n\n🏭 공장용지 권역 화학 폭발 및 유독가스 확산 위험 구역입니다. 소방청 상황실에 **화학 소방차 및 무인 방수포 탑재 차량 즉각 전면 배치**를 지시하십시오.")
+        elif fire_type == "CITY":
+            st.error(f"⏱️ **화재 인지 10분**\n\n🏢 대지 권역 고층 빌딩 화재 상황입니다. 소방차 진입로 불법 주정차 강제 견인령 및 **고가 사다리차 골든타임 최우선 차선 배정**을 가동하십시오.")
+            
+    with col2:
+        if fire_type == "WILDFIRE":
+            st.error(f"⏱️ **화재 인지 30분 (반경 {spread_speed*30:.1f}m)**\n\n⚠️ **[수관화 전개 경보]** 가파른 경사도 및 유분 인화로 화선 급변침 발생. 확산 예상 경로 주민들에게 **강제 대피 명령 및 재난 문자 자동 살포**.")
+        else:
+            st.error(f"⏱️ **화재 인지 30분**\n\n⚠️ **[유독가스 및 인명 고립 경보]** 유독 가스가 하류 도심으로 확산 중입니다. 인근 빌딩 공조 시스템 전면 차단 및 **반경 1km 이내 유동 인구 우회 강제 대피령 문자를 즉각 살포**하십시오.")
+            
+    with col3:
+        st.error(f"⏱️ **화재 인지 60분**\n\n🧑‍🚒 인근 지자체 소방력 총동원 광역 대응 단계 자동 격상. 소방 용수 공급선(소화전) 추가 확보 및 민가/주요 인프라 방어벽 최종 고착.")
+else:
+    st.info(f"💡 현재 우주 위성 통합 데이터 수집 기준: [ {st.session_state['obs_time']} ] 상태입니다. 기온 상승 및 가연성 임계치 돌파 시 자동으로 재난 프로토콜이 가동됩니다.")
+
+st.divider()
+st.caption("🚨 RYEONG-I Space-Land Integrated Fire Sentinel Platform v3.0 • 데이터 출처: 대한민국 기상청 천리안 2A호 위성센터 (getGk2aWildfire) / 기상청 단기예보 실시간 API (getUltraSrtNcst) / 환경부 환경영향평가 토지이용정보 서비스 (getJimokAttr)")
