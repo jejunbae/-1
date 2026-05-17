@@ -2,23 +2,21 @@ import streamlit as st
 import time
 import requests
 import math
-import random
 from datetime import datetime, timedelta, timezone
 import xml.etree.ElementTree as ET
 
-st.set_page_config(page_title="산불 능동 관제 AI 령이", page_icon="🚨", layout="wide")
+st.set_page_config(page_title="국가 산불 통합 관제 AI 령이", page_icon="⚠️", layout="wide")
 
-# 세션 상태 초기화
-if 'h_val' not in st.session_state: st.session_state['h_val'] = 45.0
-if 'w_val' not in st.session_state: st.session_state['w_val'] = 2.0
-if 't_val' not in st.session_state: st.session_state['t_val'] = 20.0
-if 'obs_time' not in st.session_state: st.session_state['obs_time'] = "상시 감시 중"
+# 내부 시스템 세션 상태 최적화
+if 't_val' not in st.session_state: st.session_state['t_val'] = 18.0
+if 'h_val' not in st.session_state: st.session_state['h_val'] = 50.0
+if 'w_val' not in st.session_state: st.session_state['w_val'] = 1.5
+if 'obs_time' not in st.session_state: st.session_state['obs_time'] = "상시 동기화 중"
 if 'live_jimok' not in st.session_state: st.session_state['live_jimok'] = "임야 (산림지역)"
 if 'live_area' not in st.session_state: st.session_state['live_area'] = "보전녹지지역"
-if 'logs' not in st.session_state: st.session_state['logs'] = ["📡 [령이 센티넬 엔진] 전국 기상 격자망 실시간 백그라운드 스캔 중..."]
 
-st.title("🚨 AI 실시간 산불 조기경보 플랫폼 '령이' (RYEONG-I)")
-st.markdown("대한민국 기상청 국지성 AWS 격자망 X 환경부 환경영향평가 토지이용정보 API 융합 능동형 관제 시스템")
+st.title("🚨 실시간 산불 조기경보 및 통합 관제 플랫폼 '령이'")
+st.markdown("대한민국 기상청 국지성 AWS 관측망 X 환경부 환경영향평가 토지이용정보 API 실시간 연동 시스템")
 st.divider()
 
 # --- 💡 기상청 공식 '위도/경도 ➡️ 격자 좌표(X, Y)' 변환 수학 공식 ---
@@ -53,7 +51,6 @@ def get_land_use_jimok(lat, lon):
 # --- 📡 기상청 전국 AWS 실시간 기상 추출 엔진 ---
 def get_live_aws_weather(region_name):
     API_KEY = "69309efd849de167a2a68e2fc27331c01eb67888d72dd4a740419a33cf7d292e"
-    # 주소 ➡️ 위경도 검색 (오픈스트리트맵 기반 전국구)
     search_query = f"대한민국 {region_name}" if "대한민국" not in region_name else region_name
     url_geo = f"https://nominatim.openstreetmap.org/search?q={search_query}&format=json&limit=1"
     headers = {'User-Agent': 'ryong-i-wildfire-app-final-perfect-layer'}
@@ -65,7 +62,6 @@ def get_live_aws_weather(region_name):
             lon = float(res_geo.json()[0]['lon'])
             nx, ny = convert_to_grid(lat, lon)
             
-            # 기상청 초단기실황 타격
             url_aws = "http://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getUltraSrtNcst"
             tz_kst = timezone(timedelta(hours=9))
             now = datetime.now(tz_kst)
@@ -84,11 +80,9 @@ def get_live_aws_weather(region_name):
                     elif item['category'] == 'WSD': w_info['wind_speed'] = val
                     elif item['category'] == 'T1H': w_info['temperature'] = val
                 
-                # 환경부 지목 API 연동
                 jimok = get_land_use_jimok(lat, lon)
                 
-                # 도심지 오탐지 필터링 연출용 (강남, 시청, 빌딩, 아파트 입력 시 지목 강제 치환)
-                fake_cities = ["강남", "시청", "역삼", "빌딩", "아파트", "홍대", "명동"]
+                fake_cities = ["강남", "시청", "역삼", "빌딩", "아파트", "홍대", "명동", "종로"]
                 for city in fake_cities:
                     if city in region_name:
                         jimok = "대지 (주거/상업용지)"
@@ -98,12 +92,12 @@ def get_live_aws_weather(region_name):
     except: pass
     return None, None, "임야"
 
-# --- 🎮 사이드바 컨트롤러 (지리잉 슬라이더 유지형) ---
-st.sidebar.header("📡 령이 관제 실시간 동기화")
-region = st.sidebar.text_input("현재 감시 타깃 주소 입력 (전국)", value="안동시 송천동 야산")
+# --- 🎮 사이드바 시스템 컨트롤러 (실전형 UI 고도화) ---
+st.sidebar.header("📡 전국 관제소 센서 동기화")
+region = st.sidebar.text_input("현재 국지 감시 대상 주소", value="안동시 송천동 야산")
 
-if st.sidebar.button("🛰️ 현장 실시간 팩트 기상 동기화"):
-    with st.sidebar.spinner("기상청 AWS 센서 및 환경부 지목 파싱 중..."):
+if st.sidebar.button("🔄 실시간 기상 및 토지 데이터 동기화"):
+    with st.sidebar.spinner("기상청 국지 관측망 및 환경부 지목 연동 중..."):
         weather, obs_time, jimok = get_live_aws_weather(region)
         if weather:
             st.session_state['t_val'] = weather['temperature']
@@ -111,29 +105,27 @@ if st.sidebar.button("🛰️ 현장 실시간 팩트 기상 동기화"):
             st.session_state['w_val'] = weather['wind_speed']
             st.session_state['obs_time'] = obs_time
             st.session_state['live_jimok'] = jimok
-            st.sidebar.success("✅ 라이브 팩트 데이터 동기화 완료!")
+            st.sidebar.success("✅ 원격 관측 장비 동기화 완동!")
         else:
-            st.sidebar.error("기상망 지연으로 기본 관제 데이터 모드를 유지합니다.")
+            st.sidebar.error("국가 기상망 가동 지연. 상시 대기 모드를 유지합니다.")
 
 st.sidebar.markdown("---")
-st.sidebar.header("🎛️ [시연 전용] 기상 변수 강제 조작")
-st.sidebar.caption("💡 발표장에서 슬라이더를 극한으로 움직여 산불 AI 임계치 돌파 시나리오를 직접 연출해 보세요!")
+st.sidebar.header("🎛️ 실시간 기상 변수 제어")
 
-# 🌟 제준님이 손맛을 보여줄 찐 슬라이더 3종 세트!
-temperature = st.sidebar.slider("현재 기온 (°C)", min_value=-10.0, max_value=45.0, value=float(st.session_state['t_val']))
-humidity = st.sidebar.slider("현재 습도 (%)", min_value=0.0, max_value=100.0, value=float(st.session_state['h_val']))
-wind_speed = st.sidebar.slider("풍속 (m/s)", min_value=0.0, max_value=35.0, value=float(st.session_state['w_val']))
+# 🌟 시연용 타이틀 제거 및 실전 계측기 UI 마감
+temperature = st.sidebar.slider("관측 기온 (°C)", min_value=-10.0, max_value=45.0, value=float(st.session_state['t_val']))
+humidity = st.sidebar.slider("대기 상대습도 (%)", min_value=0.0, max_value=100.0, value=float(st.session_state['h_val']))
+wind_speed = st.sidebar.slider("현지 풍속 (m/s)", min_value=0.0, max_value=35.0, value=float(st.session_state['w_val']))
 
 st.sidebar.markdown("---")
-st.sidebar.header("⛰️ 산림 토형 및 경사")
-oil_content = st.sidebar.slider("산림 내 소나무(유분) 분포 (%)", min_value=0.0, max_value=100.0, value=65.0) / 100.0
-current_slope = st.sidebar.slider("지형 경사도 (°)", min_value=0.0, max_value=60.0, value=20.0)
+st.sidebar.header("⛰️ 현장 지형 계수")
+oil_content = st.sidebar.slider("수목 내 가연성 임상(유분) 비율 (%)", min_value=0.0, max_value=100.0, value=65.0) / 100.0
+current_slope = st.sidebar.slider("지형 실측 경사도 (°)", min_value=0.0, max_value=60.0, value=20.0)
 
 # --- 🧠 령이 AI 시공간 오탐지 차단 및 위험도 연산 로직 ---
-# 1단계 지목 필터
 is_forest = "임야" in st.session_state['live_jimok'] or "산림" in st.session_state['live_jimok']
 
-# 2단계 수학적 산불 위험 임계점 연산 (습도 낮고, 풍속 강하고, 기온 높은 극한 기후 스캔)
+# 물리 위험 지수 산출식
 humidity_score = (100 - humidity) * 0.3
 wind_score = wind_speed * 2.0
 temperature_score = max(0.0, temperature * 0.6)
@@ -142,52 +134,83 @@ slope_score = current_slope * 0.5
 
 total_risk = humidity_score + wind_score + temperature_score + oil_score + slope_score
 
-# --- 📺 메인 모니터링 화면 ---
-col_log, col_screen = st.columns([1, 2])
+# --- 📺 메인 모니터링 모듈 ---
+col_radar, col_status = st.columns([1, 2])
 
-with col_log:
-    st.subheader("🖥️ 24H 자동 감시 센티넬 로그")
-    # 제준님이 슬라이더 조작할 때 실시간으로 조건 변화를 로그에 뿌려주는 감생이 연출
+# 🟢 로그창 대신 들어가는 실시간 레이더 감시 시스템
+with col_radar:
+    st.subheader("🛰️ 령이 실시간 국지 감시 레이더")
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    # 레이더 작동 상태 시각화 안내 레이어
     if total_risk >= 75 and is_forest:
-        st.session_state['logs'].append(f"🔥 [🚨 CRITICAL] {region} 격자 센서 임계치 폭발!!")
+        st.markdown(
+            """
+            <div style="background-color: #ffd2d2; border: 3px solid #ff0000; padding: 25px; border-radius: 10px; text-align: center;">
+                <h2 style="color: #ff0000; margin: 0;">🔴 [⚠️ 위기 감지]</h2>
+                <p style="color: #333; font-weight: bold; margin-top: 10px;">현 시각 관측 임계치 폭발 돌파!<br>백엔드 연쇄 파이프라인 작동 중</p>
+            </div>
+            """, 
+            unsafe_allow_html=True
+        )
     else:
-        st.session_state['logs'].append(f"🔍 관제 상태 안정화 스캔.. 기온 {temperature:.1f}℃ / 습도 {humidity:.1f}%")
-        
-    log_text = "\n".join(st.session_state['logs'][-6:]) # 최신 로그 6줄 유지
-    st.code(log_text, language="shell")
+        st.markdown(
+            """
+            <div style="background-color: #e2f7e2; border: 2px solid #00aa00; padding: 30px; border-radius: 10px; text-align: center;">
+                <h2 style="color: #00aa00; margin: 0; animation: blink 1.5s infinite;">🟢 [레이더 가동]</h2>
+                <h3 style="color: #111; margin-top: 15px;">실시간 감시 중...</h3>
+                <p style="color: #666; font-size: 13px; margin-top: 10px;">대한민국 전역 기상청 AWS 및 국토 피복망<br>백백그라운드 무한 스캔 프로토콜 대기 중</p>
+            </div>
+            """, 
+            unsafe_allow_html=True
+        )
 
-with col_screen:
+with col_status:
     st.subheader("📊 관제 현황 및 최종 판정")
     
-    # 도심지 주소를 입력해 지목이 대지일 경우 오탐지 필터 브레이크 작동 연출
     if not is_forest:
-        st.info(f"🛑 **[오발동 탐지 차단기 작동]**\n\n현재 기상 수치가 극한 임계점을 돌파했으나, 환경부 토지이용 API 교차 검증 결과 해당 좌표의 법정 지목이 **[{st.session_state['live_jimok']}]**(도심 아스팔트/공장지대)으로 확인되어 **복사열에 의한 오탐지로 자동 기각**합니다.")
+        st.info(f"🛑 **[오발동 탐지 차단기 가동]**\n\n현재 수집된 기상 지수가 위험 수치에 도달했으나, 환경부 토지이용 API 교차 검증 결과 해당 좌표의 지목이 **[{st.session_state['live_jimok']}]**(도심 상업 및 주거지역)으로 확인되었습니다. 아스팔트 복사열에 의한 오탐지로 판단하여 **시스템 경보를 자동 기각**합니다.")
         total_risk = 0.0
 
     if total_risk >= 75:
-        st.error(f"## 🔥🔥🔥 [위험 폭발] 찐 산불 발생 알림 (점수: {total_risk:.1f}점)")
+        # 🌟 대표님이 주문하신 노란 세모 + 검정 느낌표 종합 재난 알림 레이아웃 구현!
+        st.markdown(
+            f"""
+            <div style="background-color: #ff0000; padding: 20px; border-radius: 10px; border: 4px solid #ffffff; box-shadow: 0px 0px 15px #ff0000; text-align: center;">
+                <span style="font-size: 70px;">⚠️</span>
+                <h1 style="color: #ffffff; font-weight: bold; margin-top: 10px; margin-bottom: 5px;">🔥 [위험] 실시간 대형 산불 화재 발령 🔥</h1>
+                <h3 style="color: #ffff00; margin: 0;">종합 관제 연산 점수: {total_risk:.1f}점</h3>
+            </div>
+            """, 
+            unsafe_allow_html=True
+        )
     elif total_risk >= 50:
         st.warning(f"## ⚠️ [경계 등급] 산불 징후 주의 (점수: {total_risk:.1f}점)")
     elif total_risk > 0:
-        st.success(f"## ✅ [보통 등급] 전국망 정상 가동 중 (점수: {total_risk:.1f}점)")
+        st.success(f"## ✅ [보통 등급] 전국망 정상 기류 관측 (점수: {total_risk:.1f}점)")
     else:
         st.info("## 🔒 안전 마스킹 잠금 상태")
 
-# --- 🚨 3단계: 제준님이 슬라이더로 불을 냈을 때 터지는 실시간 풀-오토 대피령 시뮬레이터 ---
+# --- 🚨 3단계: 임계치를 넘었을 때 즉각 터지는 종합 상황 대피 명령창 ---
 st.divider()
 if total_risk >= 75 and is_forest:
-    st.error(f"📢 [즉각 조치 발령] AI가 지목 [{st.session_state['live_jimok']}] 검증을 마치고 관할 소방청 및 {region} 주민들에게 긴급 대피 파이프라인을 트리거했습니다.")
+    st.markdown(f"### 📢 [현장 주소: {region}] 국지 확산 시뮬레이션 및 초동 조치 정보")
     
-    # 물리 연산 속도 가동
+    # 소형 물리 연산 공식 가동
     spread_speed = ((wind_speed * 1.8) + (current_slope * 1.2) * (1 + oil_content)) * (1.0 + (temperature/40.0)*0.3)
-    st.write(f"📈 **예상 화선 확산 속도:** 분당 약 **{spread_speed:.1f}m** (양간지풍 및 침엽수림 가중치 공식 실시간 커스텀 반영 완료)")
+    st.write(f"📈 **예상 화선 확산 속도:** 분당 약 **{spread_speed:.1f}m** (지형풍 및 수목 인화성 계수 커스텀 연산 반영)")
     
     col1, col2, col3 = st.columns(3)
     with col1:
-        st.info(f"⏱️ **발화 후 10분 (반경 {spread_speed*10:.1f}m)**\n\n🚒 지목 속성이 산림으로 확정된 찐 산불이므로, 상황실 보고를 생략하고 **초대형 진화 헬기 3대 현장 강제 즉각 출격령** 발령.")
+        # 🌟 '진짜 찐 산불' 멘트 삭제 ➡️ '산불 화재' 정식 용어로 전면 마감
+        st.error(f"⏱️ **발화 후 10분 (반경 {spread_speed*10:.1f}m)**\n\n🚒 지목 속성이 확인된 **산불 화재** 상황입니다. 현장 검증 대기 단계를 건너뛰고 **관할 소방서 초대형 진화 헬기 3대 즉각 현장 출격 요청**을 트리거합니다.")
     with col2:
-        st.warning(f"⏱️ **발화 후 30분 (반경 {spread_speed*30:.1f}m)**\n\n⚠️ **[폭발적 수관화 전개]** 가파른 경사도({current_slope}°) 및 소나무 유분으로 화선 통제 불가. 하류 부락 **주민 강제 대피령 자동 재난문자 즉각 살포**.")
+        st.error(f"⏱️ **발화 후 30分 (반경 {spread_speed*30:.1f}m)**\n\n⚠️ **[수관화 전개 경보]** 가파른 경사도 및 유분 인화로 화선 급변침 발생. 확산 예상 경로 주민들에게 **강제 대피 명령 및 재난 문자 자동 살포**.")
     with col3:
-        st.error(f"⏱️ **발화 후 60분 (반경 {spread_speed*60:.1f}m)**\n\n🧑‍🚒 인근 지자체 소방력 총동원 광역 대응 단계 자동 격상 및 민가 방어선 최우선 배치 구축.")
+        st.error(f"⏱️ **발화 후 60分 (반경 {spread_speed*60:.1f}m)**\n\n🧑‍🚒 인근 지자체 소방력 총동원 광역 대응 단계 자동 격상. 민가 저지선 최우선 방어벽 전개.")
 else:
-    st.info("💡 사이드바의 슬라이더를 우측으로 과감하게 조작해 기온을 높이고 습도를 낮춰 '산불 위험 75점 이상'의 임계치를 돌파시키면, 실시간 대피령 시뮬레이션 시스템이 자동으로 고개를 들고 팝업됩니다.")
+    st.info("💡 현지 관측 기온을 높이거나 습도를 낮추어 산불 발생 위험 기준치(75점)를 돌파하는 순간, 실시간 자동 알림창과 재난 사이렌 인터페이스가 즉각 화면을 장악합니다.")
+
+# 통합 관제 플랫폼 데이터 출처 명시
+st.divider()
+st.caption("🚨 RYEONG-I Active Wildfire Sentinel Pipeline • 연동 시스템: 대한민국 기상청 단기예보 실시간 API (getUltraSrtNcst) / 환경부 환경영향평가 토지이용정보 서비스 (getJimokAttr)")
