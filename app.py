@@ -126,7 +126,7 @@ st.sidebar.markdown("---")
 st.sidebar.header("⛰️ 로컬 지형 정보 (수동 제어)")
 oil_content = st.sidebar.slider("산림 내 유분 분포 (%)", min_value=0.0, max_value=100.0, value=50.0) / 100.0
 
-# 💡 [여기에 추가됨] 슬라이더 직관성을 위한 현장 가이드 3줄 요약 양식 연동
+# 설명용 캡션 팁
 st.sidebar.caption("💡 **유분기 조절 팁:** 활엽수(참나무) 20~30% | 침엽수(소나무) 70~80% | 극심한 가뭄 시 90% 이상 설정")
 
 slope = st.sidebar.slider("지형 경사도 (°)", min_value=0.0, max_value=60.0, value=15.0)
@@ -169,7 +169,6 @@ with col2:
     st.text(f"• 인터넷 자동동기화: 시스템 인식 시간대 [{time_of_day}]")
     st.text(f"• 지형 및 임상 조건: 유분 {oil_content*100:.0f}% / 경사도 {slope}°")
 
-# 🌟 역사 데이터 팝업 영역 연동
 if matched_fire:
     st.divider()
     if matched_fire == "yangyang_2005":
@@ -216,4 +215,15 @@ else:
             
             elif minutes == 30:
                 if matched_fire == "yangyang_2005":
-                    action = f"🔥 **[비화 경보] 양간지풍
+                    action = f"🔥 **[비화 경보] 양간지풍 비화 효과 가동 중.** 불씨가 강풍을 타고 {distance:.0f}m를 점프하여 새로운 화선을 지속해서 만들어내고 있습니다. 현장 대원들은 고립 위험이 있으니 계곡 진입을 절대 금지하고, 도로와 대형 임도를 거점으로 소방차 격열 방수를 시작하십시오."
+                elif slope >= 30 or oil_content >= 0.7:
+                    action = f"🪓 **비상! 폭발적 화선 확산 상황.** 현재 경사도와 유분이 높아 '수관화'가 발생 중입니다. 1차 방화선 조를 즉시 후퇴시키고, 예상 경로 앞 지점의 대형 임도와 강을 거점으로 삼아 2차 저지선을 대대적으로 재구축하십시오."
+                else:
+                    action = f"🪓 **1차 방화선 구축 단계.** 확산 속도를 고려하여 화두 전방 저지선 구축. {region} 일대 산림 확산을 저지하기 위한 맞춤형 차단벽을 형성하십시오."
+            else:
+                if total_risk >= 85 or matched_fire == "yangyang_2005":
+                    action = f"💀 **대형산불 통제 불능 단계 경보.** 화선이 반경 {distance/1000:.1f}km까지 확장되었습니다. 소방력을 주요 국가 기간시설 및 문화재 방어에 전면 재배치하고, 확산 예측 경로의 산림을 미리 태워버리는 **'선진국형 맞불 작전(Backfire)'** 구역을 산출하여 진입로를 전면 통제하십시오."
+                else:
+                    action = f"🧑‍🚒 **광역 대응 단계 가동.** 인근 시·도 소방력 응원 요청 완료. {region} 일대 화재 확산 차단을 위한 맞불 저지선을 형성하고 야간 산불로의 장기화에 대비하십시오."
+
+            st.info(f"⏱️ **발화 후 {minutes}분** | 예상 확산 범위: 반경 **{distance:.1f}m**\n\n{action}")
