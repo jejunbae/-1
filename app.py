@@ -2,7 +2,7 @@ import streamlit as st
 import time
 import requests
 import math
-from datetime import datetime
+from datetime import datetime, timedelta
 
 st.set_page_config(page_title="산불 예방 AI 령이", page_icon="🌲", layout="wide")
 
@@ -46,10 +46,15 @@ def convert_to_grid(v1, v2):
     y = math.floor(ro - ra * math.cos(theta) + YO + 0.5)
     return x, y
 
-# --- 💡 주소 텍스트를 위도/경도로 바꿔주는 무료 지오코딩 엔진 ---
+# --- 💡 주소 검색 엔진 업그레이드 (한라산 꼭대기 방지용 필터) ---
 def get_lat_lon(location_text):
-    url = f"https://nominatim.openstreetmap.org/search?q={location_text}&format=json&limit=1"
-    headers = {'User-Agent': 'ryong-i-wildfire-app'}
+    # 사용자가 너무 짧게 치면 '시청'을 붙여 중심지를 찾도록 안전장치 세팅
+    search_query = location_text
+    if location_text in ["제주", "제주도", "강릉", "안동", "의성", "홍성"]:
+        search_query = f"대한민국 {location_text}시청" if "도" not in location_text else f"대한민국 {location_text.replace('도', '시청')}"
+
+    url = f"https://nominatim.openstreetmap.org/search?q={search_query}&format=json&limit=1"
+    headers = {'User-Agent': 'ryong-i-wildfire-app-final'}
     try:
         response = requests.get(url, headers=headers, timeout=5)
         if response.status_code == 200 and len(response.json()) > 0:
@@ -58,19 +63,23 @@ def get_lat_lon(location_text):
     except: return None, None
     return None, None
 
-# --- 📡 통합 실시간 데이터 패치 엔진 ---
+# --- 📡 통합 실시간 데이터 패치 엔진 (시간 보정 알고리즘 탑재) ---
 def get_realtime_weather_global(region_name):
     API_KEY = "69309efd849de167a2a68e2fc27331c01eb67888d72dd4a740419a33cf7d292e"
     lat, lon = get_lat_lon(region_name)
     if not lat or not lon: return None, None, None
     nx, ny = convert_to_grid(lat, lon)
 
+    # 🌟 기상청 데이터 생성 지연(매시 40분)을 완벽 방어하는 정밀 시각 보정 알고리즘
     now = datetime.now()
-    base_date = now.strftime("%Y%m%d")
-    if now.minute < 30:
-        base_time = f"{now.hour - 1:02d}00" if now.hour > 0 else "2300"
+    if now.minute < 45:
+        # 45분 전이라면 무조건 안전하게 1시간 전 정각 데이터를 호출
+        target_time = now - timedelta(hours=1)
     else:
-        base_time = f"{now.hour:02d}00"
+        target_time = now
+        
+    base_date = target_time.strftime("%Y%m%d")
+    base_time = f"{target_time.hour:02d}00"
 
     url = "http://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getUltraSrtNcst"
     params = {'serviceKey': API_KEY, 'pageNo': '1', 'numOfRows': '10', 'dataType': 'JSON', 'base_date': base_date, 'base_time': base_time, 'nx': nx, 'ny': ny}
@@ -79,13 +88,15 @@ def get_realtime_weather_global(region_name):
         response = requests.get(url, params=params, timeout=5)
         if response.status_code == 200:
             data = response.json()
-            items = data['response']['body']['items']['item']
-            weather_info = {}
-            for item in items:
-                if item['category'] == 'REH': weather_info['humidity'] = float(item['obsrValue'])
-                elif item['category'] == 'WSD': weather_info['wind_speed'] = float(item['obsrValue'])
-                elif item['category'] == 'T1H': weather_info['temperature'] = float(item['obsrValue'])
-            return weather_info, nx, ny
+            # 정상적인 데이터 바디가 들어왔는지 검증
+            if 'response' in data and 'body' in data['response'] and data['response']['body'] is not None:
+                items = data['response']['body']['items']['item']
+                weather_info = {}
+                for item in items:
+                    if item['category'] == 'REH': weather_info['humidity'] = float(item['obsrValue'])
+                    elif item['category'] == 'WSD': weather_info['wind_speed'] = float(item['obsrValue'])
+                    elif item['category'] == 'T1H': weather_info['temperature'] = float(item['obsrValue'])
+                return weather_info, nx, ny
     except: return None, nx, ny
     return None, nx, ny
 
@@ -97,10 +108,10 @@ if 'time_mode' not in st.session_state: st.session_state['time_mode'] = "주간 
 
 # --- 사이드바 UI 구성 ---
 st.sidebar.header("📡 령이 통합 기상 패널")
-region = st.sidebar.text_input("분석 대상 지역명", value="안동시 임하면")
+region = st.sidebar.text_input("분석 대상 지역명 (예: 제주시, 강릉시, 안동시 임하면)", value="안동시 임하면")
 
 if st.sidebar.button("📡 전국 실시간 날씨 및 시각 동기화"):
-    with st.sidebar.spinner(f"🗺️ '{region}' 위치 분석 및 기상청 데이터 동기화 중..."):
+    with st.sidebar.spinner(f"🗺️ '{region}' 중심지 좌표 추적 및 기상청 동기화 중..."):
         weather, calc_x, calc_y = get_realtime_weather_global(region)
         
         current_hour = datetime.now().hour
@@ -109,15 +120,15 @@ if st.sidebar.button("📡 전국 실시간 날씨 및 시각 동기화"):
         else:
             st.session_state['time_mode'] = "야간 (Nighttime)"
 
-        if weather and 'humidity' in weather and 'wind_speed' in weather:
+        if weather and 'humidity' in weather and 'wind_speed' in weather and 'temperature' in weather:
             st.session_state['h_val'] = weather['humidity']
             st.session_state['w_val'] = weather['wind_speed']
-            st.session_state['t_val'] = weather.get('temperature', 22.0)
-            st.sidebar.success(f"✅ {region} 실시간 관측망 연결 성공!")
+            st.session_state['t_val'] = weather['temperature']
+            st.sidebar.success(f"✅ {region} 실시간 기상 데이터 동기화 완료!")
         else:
-            st.sidebar.error(f"❌ 실시간 데이터를 가져오지 못했습니다.")
+            st.sidebar.error(f"❌ 기상청 서버 통신 지연 또는 위치가 부정확합니다. '제주시' 또는 '강릉시'처럼 행정구역을 정확히 적어주세요.")
 
-# 🚨 변수 꼬임 버그를 원천 차단한 정밀 동기화 슬라이더 레이어
+# 정밀 동기화 슬라이더 레이어
 temperature = st.sidebar.slider("현재 기온 (°C)", min_value=-10.0, max_value=40.0, value=float(st.session_state['t_val']))
 humidity = st.sidebar.slider("현재 습도 (%)", min_value=0.0, max_value=100.0, value=float(st.session_state['h_val']))
 wind_speed = st.sidebar.slider("풍속 (m/s)", min_value=0.0, max_value=30.0, value=float(st.session_state['w_val']))
@@ -127,12 +138,11 @@ st.sidebar.header("⛰️ 로컬 지형 정보 (수동 제어)")
 oil_content = st.sidebar.slider("산림 내 유분 분포 (%)", min_value=0.0, max_value=100.0, value=50.0) / 100.0
 st.sidebar.caption("💡 **유분기 조절 팁:** 활엽수(참나무) 20~30% | 침엽수(소나무) 70~80% | 극심한 가뭄 시 90% 이상 설정")
 
-# 변수명 충돌 방지를 위해 슬라이더 결과값을 별도 고유 변수(current_slope)로 완벽 분리
 current_slope = st.sidebar.slider("지형 경사도 (°)", min_value=0.0, max_value=60.0, value=15.0)
 
 time_of_day = st.session_state['time_mode']
 
-# 위험도 점수 계산 (업데이트된 최종 슬라이더 수치들만 실시간 추적)
+# 위험도 점수 계산
 humidity_score = (100 - humidity) * 0.25
 wind_score = wind_speed * 1.8
 oil_score = oil_content * 25
@@ -143,7 +153,7 @@ total_risk = humidity_score + wind_score + oil_score + slope_score + temperature
 if time_of_day == "야간 (Nighttime)":
     total_risk += 5.0
 
-# --- 🌟 대형 산불 역사 데이터 매칭 알고리즘 ---
+# --- 역사적 대형 산불 기상 매칭 알고리즘 ---
 matched_fire = None
 if humidity <= 20 and wind_speed >= 25.0:
     matched_fire = "yangyang_2005"
