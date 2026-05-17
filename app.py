@@ -2,7 +2,7 @@ import streamlit as st
 import time
 import requests
 import math
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 st.set_page_config(page_title="산불 예방 AI 령이", page_icon="🌲", layout="wide")
 
@@ -59,7 +59,7 @@ def get_lat_lon(location_text):
     except: return None, None
     return None, None
 
-# --- 📡 통합 실시간 데이터 패치 엔진 (순수 원본 마스터) ---
+# --- 📡 통합 실시간 데이터 패치 엔진 ---
 def get_realtime_weather_global(region_name):
     API_KEY = "69309efd849de167a2a68e2fc27331c01eb67888d72dd4a740419a33cf7d292e"
     lat, lon = get_lat_lon(region_name)
@@ -67,7 +67,10 @@ def get_realtime_weather_global(region_name):
     nx, ny = convert_to_grid(lat, lon)
 
     url = "http://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getUltraSrtNcst"
-    now = datetime.now()
+    
+    # 🌟 [시차 버그 전면 수정] 해외 클라우드 서버 시계를 한국 표준시(KST, UTC+9)로 강제 고정!
+    tz_kst = timezone(timedelta(hours=9))
+    now = datetime.now(tz_kst)
     
     for check_step in range(4):  
         target_time = now - timedelta(minutes=30 * check_step)
@@ -96,7 +99,6 @@ def get_realtime_weather_global(region_name):
                         elif item['category'] == 'T1H': weather_info['temperature'] = val
                     
                     if 'humidity' in weather_info and 'wind_speed' in weather_info and 'temperature' in weather_info:
-                        # 🌟 [보정 전면 철폐] 기상청 관측소가 찍은 팩트 그대로 반환!
                         obs_time_str = f"{target_time.hour}시 00분"
                         return weather_info, nx, ny, obs_time_str
         except:
@@ -119,7 +121,9 @@ if st.sidebar.button("📡 현장 실시간 날씨 및 시각 동기화"):
     with st.sidebar.spinner(f"🗺️ '{region}' 기상청 공식 데이터 동기화 중..."):
         weather, calc_x, calc_y, obs_time_str = get_realtime_weather_global(region)
         
-        current_hour = datetime.now().hour
+        # 시간대 연산도 한국 시간 기준으로 통일
+        tz_kst = timezone(timedelta(hours=9))
+        current_hour = datetime.now(tz_kst).hour
         if 6 <= current_hour < 18:
             st.session_state['time_mode'] = "주간 (Daytime)"
         else:
@@ -221,7 +225,7 @@ else:
                 elif time_of_day == "야간 (Nighttime)":
                     action = f"❌ **[야간 비상 통제 발령] 야간 진화 헬기 이륙 전면 금지!** 초기 10분 내에 지상 특수진화대와 고성능 화학차를 민가 방어선에 전면 배치하십시오. 야간 시야 확보를 위해 **'열화상 드론 관제팀'을 현장에 즉시 투입**하십시오."
                 elif matched_fire == "yangyang_2005":
-                    action = "🚒 **[실전 매뉴얼 - 2005 양양 주간 모티브] 사람이 서 있기 힘든 초속 30m급 양간지풍 발생.** 불씨가 수백 미터를 날아가는 비화(飛火) 현상이 심각합니다. 소방 현장 지휘관은 화두 진화보다 바람 방향 하류의 낙산사 등 문화재 및 주요 민가 보호벽 구축에 소방력을 선제 집중 배치하십시오."
+                    action = "🚒 **[실전 매뉴얼 - 2005 양양 주간 모티브] 사람이 서 있기 힘든 초속 30m급 양간지풍 발생.** 불씨가 수백 미터를 날아가는 비화(飛火) 현상이 심각합니다. 소방 현장 지휘관은 화두 진화보다 바람 방향 하류 of 낙산사 등 문화재 및 주요 민가 보호벽 구축에 소방력을 선제 집중 배치하십시오."
                 elif matched_fire == "hongseong":
                     action = "🚒 **[실전 매뉴얼 - 홍성 모티브]** 연소 확대 방지(민가 방어선 구축)를 1순위 목표로 소방차를 전면 배치하십시오."
                 elif matched_fire == "gangneung":
