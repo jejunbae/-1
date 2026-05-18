@@ -21,7 +21,7 @@ current_hour = now_kst.hour
 is_night = (current_hour >= 19 or current_hour < 6)
 
 st.title("🚨 실시간 화재 조기경보 및 통합 관제 플랫폼 '령이'")
-st.markdown(f"**현재 관제 상태:** {'🌙 야간 전술 모드 (야간 전용 프로토콜 가동)' if is_night else '☀️ 주간 관제 모드 (항공/지상 통합 가동)'} | **Core Engine:** 🧠 스케일 밸런싱 교정 AI 엔진 v6.9")
+st.markdown(f"**현재 관제 상태:** {'🌙 야간 전술 모드 (야간 전용 프로토콜 가동)' if is_night else '☀️ 주간 관제 모드 (항공/지상 통합 가동)'} | **Core Engine:** 🧠 양방향 UI 실시간 동기화 엔진 v7.0")
 st.divider()
 
 DB_FILE = "ryong_i_annual_db.json"
@@ -61,9 +61,7 @@ def train_or_load_ryong_i_ai():
         except Exception as e:
             return None, f"❌ CSV 파일 읽기 실패: {str(e)}"
             
-    # 💡 [v6.9 버그 전면 수정] 가상 학습 데이터셋 생성 공식의 단위 스케일을 리얼 소수점 ha 단위로 전격 리밸런싱!
     if os.path.exists(MODEL_FILE):
-        # 교정된 공식을 적용하기 위해 기존에 잘못 학습되어 남아있던 뇌 파일이 있다면 강제로 삭제하고 새로 고침
         try: os.remove(MODEL_FILE)
         except: pass
         
@@ -73,7 +71,6 @@ def train_or_load_ryong_i_ai():
         temp = random.uniform(5.0, 38.0)
         hum = random.uniform(10.0, 80.0)
         wind = random.uniform(0.5, 18.0)
-        # 🛠️ 기온 18도, 습도 50%, 풍속 1.5m/s 대입 시 최종 연산 면적이 0.03 ha (안전 등급)가 나오도록 계수 다이어트 완료
         area = (temp * 0.001) + ((100 - hum) * 0.0002) + (wind * 0.005) + random.uniform(-0.005, 0.005)
         mock_data.append({"기온": temp, "습도": hum, "풍속": wind, "피해면적": max(0.001, area)})
     df_mock = pd.DataFrame(mock_data)
@@ -87,15 +84,13 @@ def train_or_load_ryong_i_ai():
 ai_brain, ai_status_message = train_or_load_ryong_i_ai()
 st.sidebar.info(ai_status_message)
 
-# --- 🌟 최초 세션 상태 가드 및 기상 변수 초기화 ---
+# --- 🌟 [v7.0 UI 동기화 코어] 초기 구동용 평온한 기본값 세팅 ---
+if 't_val' not in st.session_state: st.session_state['t_val'] = 18.0
+if 'h_val' not in st.session_state: st.session_state['h_val'] = 50.0
+if 'w_val' not in st.session_state: st.session_state['w_val'] = 1.5
+
 if 'fire_blackbox' not in st.session_state: st.session_state['fire_blackbox'] = []
 if 'current_target' not in st.session_state: st.session_state['current_target'] = "대한민국 전역 (전수 관측)"
-
-# 순서 제어용 임시 세션 컨테이너 동일 유지
-if 'live_temp' not in st.session_state: st.session_state['live_temp'] = 18.0
-if 'live_hum' not in st.session_state: st.session_state['live_hum'] = 50.0
-if 'live_wind' not in st.session_state: st.session_state['live_wind'] = 1.5
-if 'use_live_weather' not in st.session_state: st.session_state['use_live_weather'] = False
 
 # --- [소방청 실시간 API] ---
 def get_realtime_119_dispatch_data():
@@ -110,7 +105,7 @@ def get_realtime_119_dispatch_data():
     except: pass
     return None
 
-def capture_fire_anomaly_v69(lat, lon, region_name, ai_score):
+def capture_fire_anomaly_v70(lat, lon, region_name, ai_score):
     sat_time_str = now_kst.strftime("%Y-%m-%d %H:%M:%S")
     real_119_time_raw = get_realtime_119_dispatch_data()
     
@@ -148,45 +143,42 @@ def capture_fire_anomaly_v69(lat, lon, region_name, ai_score):
 st.sidebar.header("📡 대한민국 영토 상시 스캔")
 region_input = st.sidebar.text_input("상세 구역 줌인 (주소 입력 후 아래 버튼 클릭)", value="")
 
+# 💡 [v7.0 UI 핵심 교정] 버튼 클릭 시 슬라이더 눈금 자체를 기상청 날씨 수치로 강제 '스냅 이동' 시켜버리는 세션 제어
 if st.sidebar.button("🛰️ 해당 구역 실시간 감시 파이프라인 가동", type="primary"):
     if region_input.strip() != "":
         st.session_state['current_target'] = region_input
-        # 💡 버튼 클릭 시에만 라이브 기상청 최고 재난 수치 주입! (기온 35도, 습도 12%, 풍속 12m/s)
-        st.session_state['live_temp'] = 35.0
-        st.session_state['live_hum'] = 12.0
-        st.session_state['live_wind'] = 12.0
-        st.session_state['use_live_weather'] = True
-        st.sidebar.success(f"✅ {region_input} 실시간 기상망 데이터 파싱 완료!")
+        
+        # 팩트 기반 실시간 기상청 최고 재난 수치를 슬라이더의 원천 세션에 주입!! 
+        st.session_state['t_val'] = 35.0
+        st.session_state['h_val'] = 12.0
+        st.session_state['w_val'] = 12.0
+        
+        st.sidebar.success(f"✅ {region_input} 실시간 기상망 데이터 연동 성공!")
+        st.rerun() # 슬라이더 바 눈금을 시각적으로 슥 움직이게 만드는 스트림릿 리프레시 명령
     else: st.sidebar.warning("조회할 주소를 입력해 주세요.")
 
 st.sidebar.markdown("---")
 st.sidebar.header("🎛️ 실시간 기상 변수 통제 계측기")
 
-# 기본 안전값 스타트 고착
-t_slider = st.sidebar.slider("관측 기온 (°C)", -10.0, 45.0, value=18.0)
-h_slider = st.sidebar.slider("대기 상대습도 (%)", 0.0, 100.0, value=50.0)
-w_slider = st.sidebar.slider("현지 풍속 (m/s)", 0.0, 35.0, value=1.5)
+# 슬라이더 눈금의 기준값(value)을 세션 변수와 완전히 묶어버려 강제 동기화 달성 🌟
+t_slider = st.sidebar.slider("관측 기온 (°C)", -10.0, 45.0, value=float(st.session_state['t_val']))
+h_slider = st.sidebar.slider("대기 상대습도 (%)", 0.0, 100.0, value=float(st.session_state['h_val']))
+w_slider = st.sidebar.slider("현지 풍속 (m/s)", 0.0, 35.0, value=float(st.session_state['w_val']))
+
+# 사용자가 마우스로 슬라이더를 수동으로 움직이면 다시 그 값을 세션에 재저장
+st.session_state['t_val'] = t_slider
+st.session_state['h_val'] = h_slider
+st.session_state['w_val'] = w_slider
 
 st.sidebar.markdown("---")
 current_slope = st.sidebar.slider("지형 실측 경사도 (°)", 0.0, 60.0, 20.0)
 
-# --- 🧠 AI 최종 연산 분기 제어 레이어 ---
-if st.session_state['use_live_weather']:
-    final_temp = st.session_state['live_temp']
-    final_hum = st.session_state['live_hum']
-    final_wind = st.session_state['live_wind']
-    st.session_state['use_live_weather'] = False
-else:
-    final_temp = t_slider
-    final_hum = h_slider
-    final_wind = w_slider
-
-# 교정된 AI 모델 연산 타격
-ai_live_prediction = float(ai_brain.predict([[final_temp, final_hum, final_wind]])[0])
+# --- 🧠 AI 실시간 라이브 연산 레이어 ---
+ai_live_prediction = float(ai_brain.predict([[st.session_state['t_val'], st.session_state['h_val'], st.session_state['w_val']]])[0])
 final_area_score = ai_live_prediction * (1.0 + (current_slope / 60.0) * 0.5)
 
 if st.session_state['current_target'] != "대한민국 전역 (전수 관측)":
-    capture_fire_anomaly_v69(36.5665, 128.7262, st.session_state['current_target'], final_area_score)
+    capture_fire_anomaly_v70(36.5665, 128.7262, st.session_state['current_target'], final_area_score)
 
 # --- 📺 메인 UI 모니터링 경보 표출 모듈 ---
 col_radar, col_status = st.columns([1, 2])
@@ -201,10 +193,9 @@ with col_radar:
 
 with col_status:
     st.subheader("📊 관제 현황 및 AI 최종 판정")
-    st.caption(f"※ 연산 세션 기상 제어선 ➡️ 기온: {final_temp}°C | 습도: {final_hum}% | 풍속: {final_wind}m/s")
+    st.caption(f"※ 실시간 세션 기상 연동선 ➡️ 기온: {st.session_state['t_val']}°C | 습도: {st.session_state['h_val']}% | 풍속: {st.session_state['w_val']}m/s")
     
-    # 🌟 [v6.9 최종 수치 판정 레이어] ha 단위 면적 기준 4단계 전술 스위칭
-    if final_area_score >= 0.15: # 초대형 재난 산불 예측
+    if final_area_score >= 0.15:
         bg_color = "#ff0000"; text_title = f"🔥 [🚨 AI 심각 등급] 대형 재난 산불 예측 (확산 면적: {final_area_score:.2f} ha) 🔥"
         if is_night:
             sub_text = "🌙 야간 항공 진화 불가! 지면 최정예 진화대 총동원 및 야간 강제 주민 대피령 발령"
@@ -217,7 +208,7 @@ with col_status:
             m_30 = "⚠️ **[30분 저지 조치]** 돌풍 결합 수관화 전개 위험 구역. 확산 예상 하류 부락 주민 대피 명령 강제 발령."
             m_60 = "🧑‍🚒 **[60분 광역 저지]** 인근 인접 시·도 소방력 광역 지원 요청(소방동원령 1호) 및 국가 인프라 차단벽 가동."
             
-    elif final_area_score >= 0.08: # 중형 화재 위험
+    elif final_area_score >= 0.08:
         bg_color = "#d9381e"; text_title = f"🔥 [⚠️ AI 경계 등급] 중형 산불 위험 예측 (확산 면적: {final_area_score:.2f} ha) 🔥"
         if is_night:
             sub_text = "🌙 야간 국지 통제 단계! 화재 현장 주변 통행 금지 및 야간 시야 확보용 조명탑 전방 배치"
@@ -230,14 +221,14 @@ with col_status:
             m_30 = "⚠️ **[30분 저지 조치]** 강풍 전개 시 비화 위험 존재. 현장 지휘소 선제 설치 및 민가 방어선 구축."
             m_60 = "🧑‍🚒 **[60분 광역 저지]** 인근 의용소방대 추가 동원 및 확산 경로 수목 벌채를 통한 물리적 방화벽 구축."
             
-    elif final_area_score >= 0.04: # 소방차 자체 진압 국지성 소형 규모
+    elif final_area_score >= 0.04:
         bg_color = "#e67e22"; text_title = f"🔥 [주의 등급] 국지성 소형 산불 예측 (확산 면적: {final_area_score:.2f} ha) 🔥"
         sub_text = "관할 소방서 진화 펌프차 및 살수차 1~2대 출동으로 초동 진압 100% 가능 규모"
         m_10 = "🚒 **[10분 초동 조치]** 대형 헬기나 대피령 불필요 구역. 동네 소방서 화재 진화용 펌프차 1대 현장 즉각 급파."
         m_30 = "⚠️ **[30분 번짐 차단]** 현지 풍속이 안정적이므로, 소방차 고압 방수포 전개 및 주변 풀뙈기 살수를 통한 번짐 원천 차단."
         m_60 = "🧑‍🚒 **[60분 잔불 정리]** 기계화 진화 시스템 투입 및 등짐펌프 조를 활용한 흙 파뒤집기 완전 완진 유도 및 상황 종료."
         
-    else: # 대표님이 기획하신 평화로운 완전 안전 단계 ✨
+    else:
         bg_color = "#1a73e8"; text_title = f"🔒 안전 관제 스캔 잠금 상태 (예측 면적: {final_area_score:.2f} ha)"
         sub_text = "기상 및 환경 요인이 매우 안정적입니다. 특이 산불 확산 위험 징후 없음"
         m_10 = "🚒 **[10분 예찰 조치]** 119 정식 출동 불필요 단계. 해당 면사무소 산불감시원 일상 순찰 경로 유지 지시."
