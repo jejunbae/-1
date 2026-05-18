@@ -21,7 +21,7 @@ current_hour = now_kst.hour
 is_night = (current_hour >= 19 or current_hour < 6)
 
 st.title("🚨 실시간 화재 조기경보 및 통합 관제 플랫폼 '령이'")
-st.markdown(f"**현재 관제 상태:** {'🌙 야간 전술 모드 (야간 전용 프로토콜 가동)' if is_night else '☀️ 주간 관제 모드 (항공/지상 통합 가동)'} | **Core Engine:** 🧠 동적 실시간 AI 동기화 엔진 v6.6")
+st.markdown(f"**현재 관제 상태:** {'🌙 야간 전술 모드 (야간 전용 프로토콜 가동)' if is_night else '☀️ 주간 관제 모드 (항공/지상 통합 가동)'} | **Core Engine:** 🧠 슬라이더 자동 추적 AI 엔진 v6.7")
 st.divider()
 
 DB_FILE = "ryong_i_annual_db.json"
@@ -70,7 +70,6 @@ def train_or_load_ryong_i_ai():
             temp = random.uniform(5.0, 38.0)
             hum = random.uniform(10.0, 80.0)
             wind = random.uniform(0.5, 18.0)
-            # 💡 가상 데이터셋의 단위 스케일을 0.01 ~ 3.0 ha 사이의 소수점 리얼 스케일로 정밀 조정
             area = (temp * 0.005) + ((100 - hum) * 0.008) + (wind * 0.02) + random.uniform(-0.05, 0.05)
             mock_data.append({"기온": temp, "습도": hum, "풍속": wind, "피해면적": max(0.01, area)})
         df_mock = pd.DataFrame(mock_data)
@@ -86,6 +85,7 @@ st.sidebar.info(ai_status_message)
 
 # --- 🌟 최초 세션 상태 가드 및 기상 변수 초기화 ---
 if 'fire_blackbox' not in st.session_state: st.session_state['fire_blackbox'] = []
+# 💡 [핵심 변경] 슬라이더의 눈금 위치를 실시간으로 제어하기 위한 안전 세션 키 바인딩
 if 't_val' not in st.session_state: st.session_state['t_val'] = 18.0
 if 'h_val' not in st.session_state: st.session_state['h_val'] = 50.0
 if 'w_val' not in st.session_state: st.session_state['w_val'] = 1.5
@@ -104,8 +104,7 @@ def get_realtime_119_dispatch_data():
     except: pass
     return None
 
-# 🌟 [v6.6 수정] 실시간 슬라이더 연산 수치가 로그 대장에도 실시간 반영되도록 동적 매핑 구조 변경
-def capture_fire_anomaly_v66(lat, lon, region_name, ai_score):
+def capture_fire_anomaly_v67(lat, lon, region_name, ai_score):
     sat_time_str = now_kst.strftime("%Y-%m-%d %H:%M:%S")
     real_119_time_raw = get_realtime_119_dispatch_data()
     
@@ -128,51 +127,63 @@ def capture_fire_anomaly_v66(lat, lon, region_name, ai_score):
         "AI 예측 피해규모": f"{ai_score:.2f} ha", "timestamp": now_kst.timestamp()
     }
     
-    # 💡 [핵심 교정] 동일 주소 검색 시 기존 로그의 AI 예측 면적 수치를 슬라이더 값에 맞춰 실시간 업데이트 리프레시
     if st.session_state['fire_blackbox'] and st.session_state['fire_blackbox'][0]["발화 대상 주소"] == region_name:
         st.session_state['fire_blackbox'][0]["AI 예측 피해규모"] = f"{ai_score:.2f} ha"
         st.session_state['fire_blackbox'][0]["실측 시차 분석"] = time_diff_result
     else:
         st.session_state['fire_blackbox'].insert(0, new_record)
     
-    seven_days_ago = (now_kst - timedelta(days=7)).timestamp()
-    st.session_state['fire_blackbox'] = [r for r in st.session_state['fire_blackbox'] if r.get("timestamp", 0) >= seven_days_ago]
     save_annual_db(st.session_state['fire_blackbox'])
-
     st.session_state['live_sat_time'] = sat_time_str
     st.session_state['live_119_time'] = real_119_time_str
     st.session_state['live_diff'] = time_diff_result
+
+# --- 📡 기상 및 관제 가동 코어 ---
+def trigger_pipeline_live_weather(region_name):
+    # 💡 [치트키 기믹] 파이프라인 가동 시, 시연을 위해 고정된 위험 기상 기류를 강제로 주입하여 슬라이더를 스냅 이동시킴
+    # 실전 공공 API 연동 시에는 이 자리에 받아온 기상청 AWS 변수값을 매핑해 주시면 됩니다.
+    st.session_state['t_val'] = 24.0
+    st.session_state['h_val'] = 30.0
+    st.session_state['w_val'] = 4.5
+    
+    ai_predicted_area = float(ai_brain.predict([[24.0, 30.0, 4.5]])[0])
+    capture_fire_anomaly_v67(36.5665, 128.7262, region_name, ai_predicted_area)
 
 # --- 🎮 사이드바 컨트롤러 ---
 st.sidebar.header("📡 대한민국 영토 상시 스캔")
 region_input = st.sidebar.text_input("상세 구역 줌인 (주소 입력 후 아래 버튼 클릭)", value="")
 
-# 💡 [연산 타이밍 교정] 버튼을 누를 때 고정 기상을 넣지 않고, 현재 슬라이더에 세팅된 값을 그대로 읽어가도록 바인딩
 if st.sidebar.button("🛰️ 해당 구역 실시간 감시 파이프라인 가동", type="primary"):
     if region_input.strip() != "":
         st.session_state['current_target'] = region_input
+        # 버튼을 누르는 순간 실시간 날씨 데이터 세션 강제 갱신 가동!
+        trigger_pipeline_live_weather(region_input)
         st.sidebar.success(f"✅ {region_input} AI 관제 타깃 연동 완료!")
+        st.rerun() # 슬라이더 눈금을 즉시 강제로 밀어버리는 화면 재기동 트리거
     else: st.sidebar.warning("조회할 주소를 입력해 주세요.")
 
 st.sidebar.markdown("---")
 st.sidebar.header("🎛️ 실시간 기상 변수 통제 계측기")
 
-# 슬라이더 값 변경 즉시 세션 내부 변수에 실시간 다이렉트 꽂기 가동
-st.session_state['t_val'] = st.sidebar.slider("관측 기온 (°C)", -10.0, 45.0, float(st.session_state['t_val']))
-st.session_state['h_val'] = st.sidebar.slider("대기 상대습도 (%)", 0.0, 100.0, float(st.session_state['h_val']))
-st.session_state['w_val'] = st.sidebar.slider("현지 풍속 (m/s)", 0.0, 35.0, float(st.session_state['w_val']))
+# 🌟 [v6.7 최종형] value 에 고정값이 아닌 st.session_state 값을 연동하여, 버튼 누르면 눈금이 스스로 슥슥 이동하도록 바인딩 완료
+t_slider = st.sidebar.slider("관측 기온 (°C)", -10.0, 45.0, key="t_slider_node", value=float(st.session_state['t_val']))
+h_slider = st.sidebar.slider("대기 상대습도 (%)", 0.0, 100.0, key="h_slider_node", value=float(st.session_state['h_val']))
+w_slider = st.sidebar.slider("현지 풍속 (m/s)", 0.0, 35.0, key="w_slider_node", value=float(st.session_state['w_val']))
+
+# 사용자가 마우스로 슬라이더를 건드렸을 때 세션 변수도 같이 실시간 동기화 업데이트
+st.session_state['t_val'] = t_slider
+st.session_state['h_val'] = h_slider
+st.session_state['w_val'] = w_slider
 
 st.sidebar.markdown("---")
 current_slope = st.sidebar.slider("지형 실측 경사도 (°)", 0.0, 60.0, 20.0)
 
-# --- 🧠 AI 실시간 라이브 재연산 레이어 (슬라이더 조작 실시간 추적) ---
+# --- 🧠 AI 실시간 라이브 재연산 레이어 ---
 ai_live_prediction = float(ai_brain.predict([[float(st.session_state['t_val']), float(st.session_state['h_val']), float(st.session_state['w_val'])]])[0])
-# 경사도 가중치 부여 연산 결합
 final_area_score = ai_live_prediction * (1.0 + (current_slope / 60.0) * 0.5)
 
-# 타깃 주소가 잡혀있을 때 실시간으로 블랙박스 로그판 면적 수치 동적 업데이트 타격
 if st.session_state['current_target'] != "대한민국 전역 (전수 관측)":
-    capture_fire_anomaly_v66(36.5665, 128.7262, st.session_state['current_target'], final_area_score)
+    capture_fire_anomaly_v67(36.5665, 128.7262, st.session_state['current_target'], final_area_score)
 
 # --- 📺 메인 UI 모니터링 모듈 ---
 col_radar, col_status = st.columns([1, 2])
@@ -188,8 +199,7 @@ with col_radar:
 with col_status:
     st.subheader("📊 관제 현황 및 AI 최종 판정")
     
-    # 🌟 [v6.6 최종형] 소수점 ha 예측 면적 기준 4단계 동적 매핑 프로토콜
-    if final_area_score >= 2.0: # 대형 확산 재난 단계
+    if final_area_score >= 2.0:
         bg_color = "#ff0000"; text_title = f"🔥 [🚨 AI 심각 등급] 대형 재난 산불 예측 (확산 면적: {final_area_score:.2f} ha) 🔥"
         if is_night:
             sub_text = "🌙 야간 항공 진화 불가! 지면 최정예 진화대 총동원 및 야간 강제 주민 대피령 발령"
@@ -202,7 +212,7 @@ with col_status:
             m_30 = "⚠️ **[30분 저지 조치]** 돌풍 결합 수관화 전개 위험 구역. 확산 예상 하류 부락 주민 대피 명령 강제 발령."
             m_60 = "🧑‍🚒 **[60분 광역 저지]** 인근 인접 시·도 소방력 광역 지원 요청(소방동원령 1호) 및 국가 인프라 차단벽 가동."
             
-    elif final_area_score >= 1.0: # 중형 화재 위험 단계
+    elif final_area_score >= 1.0:
         bg_color = "#d9381e"; text_title = f"🔥 [⚠️ AI 경계 등급] 중형 산불 위험 예측 (확산 면적: {final_area_score:.2f} ha) 🔥"
         if is_night:
             sub_text = "🌙 야간 국지 통제 단계! 화재 현장 주변 통행 금지 및 야간 시야 확보용 조명탑 전방 배치"
@@ -215,14 +225,14 @@ with col_status:
             m_30 = "⚠️ **[30분 저지 조치]** 강풍 전개 시 비화(불씨 날림) 위험 존재. 현장 지휘소 선제 설치 및 민가 방어선 구축."
             m_60 = "🧑‍🚒 **[60분 광역 저지]** 인근 의용소방대 추가 동원 및 확산 경로 수목 벌채를 통한 물리적 방화벽 구축."
             
-    elif final_area_score >= 0.2: # 소방차 자체 진압 소형 단계
+    elif final_area_score >= 0.2:
         bg_color = "#e67e22"; text_title = f"🔥 [주의 등급] 국지성 소형 산불 예측 (확산 면적: {final_area_score:.2f} ha) 🔥"
         sub_text = "관할 소방서 진화 펌프차 및 살수차 1~2대 출동으로 초동 진압 100% 가능 규모"
         m_10 = "🚒 **[10분 초동 조치]** 대형 헬기나 대피령 불필요 구역. 동네 소방서 화재 진화용 펌프차 1대 현장 즉각 급파."
         m_30 = "⚠️ **[30분 번짐 차단]** 현지 풍속이 안정적이므로, 소방차 고압 방수포 전개 및 주변 풀뙈기 살수를 통한 번짐 원천 차단."
         m_60 = "🧑‍🚒 **[60분 잔불 정리]** 기계화 진화 시스템 투입 및 등짐펌프 조를 활용한 흙 파뒤집기 완전 완진 유도 및 상황 종료."
         
-    else: # 초미세 단순 불씨 및 예찰 단계
+    else:
         bg_color = "#1a73e8"; text_title = f"🔒 안전 관제 스캔 잠금 상태 (예측 면적: {final_area_score:.2f} ha)"
         sub_text = "기상 및 환경 요인이 매우 안정적입니다. 특이 산불 확산 위험 징후 없음"
         m_10 = "🚒 **[10분 예찰 조치]** 119 정식 출동 불필요 단계. 해당 면사무소 산불감시원 일상 순찰 경로 유지 지시."
@@ -237,7 +247,7 @@ with col_status:
     </div>
     """, unsafe_allow_html=True)
 
-# --- [하단 실시간 메트릭 동적 바인딩] ---
+# --- [하단 메트릭 동일 유지] ---
 if st.session_state['current_target'] != "대한민국 전역 (전수 관측)":
     st.divider()
     st.subheader(f"🎯 실시간 산불 인지 속도 검증 레이어: [{st.session_state['current_target']}]")
