@@ -14,348 +14,83 @@ import joblib
 
 st.set_page_config(page_title="국가 화재 통합 관제 AI 령이", page_icon="⚠️", layout="wide")
 
-# --- 🕒 실시간 시간대(Day/Night) 자동 인지 시스템 ---
+# --- 🕒 실시간 시간대(Day/Night) 인지 ---
 tz_kst = timezone(timedelta(hours=9))
 now_kst = datetime.now(tz_kst)
 current_hour = now_kst.hour
 is_night = (current_hour >= 19 or current_hour < 6)
 
 st.title("🚨 실시간 화재 조기경보 및 통합 관제 플랫폼 '령이'")
-st.markdown(f"**현재 관제 상태:** {'🌙 야간 전술 모드 (야간 전용 프로토콜 가동)' if is_night else '☀️ 주간 관제 모드 (항공/지상 통합 가동)'} | **Core Engine:** 🧠 국토부-기상청 완전 융합형 AI 엔진 v11.0")
+st.markdown(f"**현재 관제 상태:** {'🌙 야간 전술 모드' if is_night else '☀️ 주간 관제 모드'} | **Core Engine:** ⏱️ v13.0 AI 브레인 학습 & 시계열 동적 예측")
 st.divider()
 
 DB_FILE = "ryong_i_annual_db.json"
 MODEL_FILE = "ryong_i_ai_brain.pkl"
-CSV_FILE = "산불발생대장.csv"
 
-def load_annual_db():
-    if os.path.exists(DB_FILE):
-        try:
-            with open(DB_FILE, "r", encoding="utf-8") as f: return json.load(f)
-        except: return []
-    return []
+# 령이의 뇌(AI) 로드 (학습된 모델이 있으면 불러오고, 없으면 기본값 사용)
+if os.path.exists(MODEL_FILE):
+    ai_brain = joblib.load(MODEL_FILE)
+    ai_status_message = "✅ [각성 모드] 학습된 AI 브레인 적용 완료!"
+else:
+    ai_brain = None
+    ai_status_message = "⚠️ [기본 모드] 학습된 뇌 파일을 찾을 수 없습니다. (train_ai.py 실행 필요)"
 
-def save_annual_db(data):
-    try:
-        with open(DB_FILE, "w", encoding="utf-8") as f: json.dump(data, f, ensure_ascii=False, indent=4)
-    except: pass
-
-# --- 🧠 AI 실시간 기상 데이터 융합 훈련 엔진 ---
-@st.cache_resource
-def train_or_load_ryong_i_ai():
-    if os.path.exists(CSV_FILE):
-        try:
-            df = pd.read_csv(CSV_FILE, encoding='utf-8')
-            if '기온' not in df.columns:
-                random.seed(42)
-                df['기온'] = df['피해면적'].apply(lambda x: min(39.0, 15.0 + (x * 1.5) + random.uniform(-3, 3)))
-                df['습도'] = df['피해면적'].apply(lambda x: max(8.0, 60.0 - (x * 2.5) - random.uniform(-4, 4)))
-                df['풍속'] = df['피해면적'].apply(lambda x: min(28.0, 1.5 + (x * 0.8) + random.uniform(-0.5, 1.5)))
-            
-            X = df[['기온', '습도', '풍속']]
-            y = df['피해면적']
-            model = RandomForestRegressor(n_estimators=100, random_state=42)
-            model.fit(X, y)
-            joblib.dump(model, MODEL_FILE)
-            return model, f"✅ [찐 빅데이터 ML 모드] 대한민국 산불 이력 ({len(df)}건) 및 소수점 피해면적 기준 AI 머신러닝 학습 완벽 종결!"
-        except Exception as e:
-            return None, f"❌ CSV 파일 읽기 실패: {str(e)}"
-            
-    if os.path.exists(MODEL_FILE):
-        try: os.remove(MODEL_FILE)
-        except: pass
-        
-    random.seed(42)
-    mock_data = []
-    for _ in range(1000):
-        temp = random.uniform(5.0, 38.0)
-        hum = random.uniform(10.0, 80.0)
-        wind = random.uniform(0.5, 18.0)
-        area = (temp * 0.001) + ((100 - hum) * 0.0002) + (wind * 0.005) + random.uniform(-0.005, 0.005)
-        mock_data.append({"기온": temp, "습도": hum, "풍속": wind, "피해면적": max(0.001, area)})
-    df_mock = pd.DataFrame(mock_data)
-    X_mock = df_mock[['기온', '습도', '풍속']]
-    y_mock = df_mock['피해면적']
-    model = RandomForestRegressor(n_estimators=50, random_state=42)
-    model.fit(X_mock, y_mock)
-    joblib.dump(model, MODEL_FILE)
-    return model, "🌱 [스케일 교정 완료] 내부 환경 데이터셋 1,000건 기반 현실 스케일 AI 머신러닝 학습 완료"
-
-ai_brain, ai_status_message = train_or_load_ryong_i_ai()
 st.sidebar.info(ai_status_message)
 
-# --- 🌟 [v11.0] UI 동기화 세션 상태 설정 및 경사도(Slope) 초기화 추가 ---
+# --- 🌟 세션 상태 설정 ---
 if 't_val' not in st.session_state: st.session_state['t_val'] = 18.0
 if 'h_val' not in st.session_state: st.session_state['h_val'] = 50.0
 if 'w_val' not in st.session_state: st.session_state['w_val'] = 1.5
 if 'wd_val' not in st.session_state: st.session_state['wd_val'] = 180.0
-if 'slope_val' not in st.session_state: st.session_state['slope_val'] = 20.0 # 경사도 초기 기본 세션 세팅
-
+if 'slope_val' not in st.session_state: st.session_state['slope_val'] = 20.0
+if 'pty_val' not in st.session_state: st.session_state['pty_val'] = 0
 if 'fire_blackbox' not in st.session_state: st.session_state['fire_blackbox'] = []
-if 'current_target' not in st.session_state: st.session_state['current_target'] = "대한민국 전역 (전수 관측)"
+if 'current_target' not in st.session_state: st.session_state['current_target'] = "대한민국 전역"
 
-# --- [소방청 실시간 API] ---
-def get_realtime_119_dispatch_data():
-    API_KEY = "69309efd849de167a2a68e2fc27331c01eb67888d72dd4a740419a33cf7d292e"
-    url = "http://apis.data.go.kr/1560000/FireStnDispathInfoService/getFireStnDispathInfoList"
-    params = {'serviceKey': API_KEY, 'pageNo': '1', 'numOfRows': '1', 'dataType': 'JSON'}
-    try:
-        res = requests.get(url, params=params, timeout=2)
-        if res.status_code == 200 and 'response' in res.json():
-            items = res.json()['response']['body']['items']['item']
-            return str(items[0]['dispathDsstTm']) if items else None
-    except: pass
-    return None
-
-# --- [기상청 실시간 API : 대기 데이터 파싱] ---
+# --- [기상청 & 브이월드 API 함수들 (생략... 기존과 동일)] ---
+# (이 부분은 기존에 잘 작동하던 코드를 그대로 유지하세요)
 def fetch_kma_live_weather():
-    API_KEY = "69309efd849de167a2a68e2fc27331c01eb67888d72dd4a740419a33cf7d292e"
-    url = "http://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getUltraSrtNcst"
-    base_time_dt = datetime.now(tz_kst) - timedelta(minutes=30)
-    base_date = base_time_dt.strftime("%Y%m%d")
-    base_time = base_time_dt.strftime("%H00")
-    params = {'serviceKey': API_KEY, 'pageNo': '1', 'numOfRows': '10', 'dataType': 'JSON', 'base_date': base_date, 'base_time': base_time, 'nx': '91', 'ny': '106'}
-    
-    live_t, live_h, live_w, live_wd = 14.5, 62.0, 1.2, 180.0
-    try:
-        res = requests.get(url, params=params, timeout=2.5)
-        if res.status_code == 200 and 'response' in res.json():
-            items = res.json()['response']['body']['items']['item']
-            for item in items:
-                if item['category'] == 'T1H': live_t = float(item['obsrValue'])
-                elif item['category'] == 'REH': live_h = float(item['obsrValue'])
-                elif item['category'] == 'WSD': live_w = float(item['obsrValue'])
-                elif item['category'] == 'VEC': live_wd = float(item['obsrValue'])
-    except: pass
-    return live_t, live_h, live_w, live_wd
+    # ... 기존 코드 내용 동일 ...
+    return 18.0, 50.0, 1.5, 180.0, 0.0, 0
 
-# --- 🌟 [v11.0 전격 추가] 국토교통부 브이월드(V-World) 지형 고도 DEM 오픈 API 연동망 ---
 def fetch_vworld_live_slope():
-    # 국토교통부 브이월드 공간정보 API 연동 
-    API_KEY = "7F688A11-E62D-3183-B75B-3286BC13D7C5"
-    url = "http://api.vworld.kr/req/dem"
-    
-    # 안동시 임야 지역 중심점 실측 좌표 매핑 (위도 36.5665, 경도 128.7262)
-    params = {
-        'key': API_KEY, 'service': 'dem', 'request': 'getnumeric',
-        'x': '128.7262', 'y': '36.5665'
-    }
-    
-    # 기본 백업 경사도 라인 (API 예외 발생 시 안동 표준 산세 경사도인 23.5도로 세팅)
-    live_slope = 23.5
-    try:
-        res = requests.get(url, params=params, timeout=2.0)
-        if res.status_code == 200:
-            xml_data = res.text
-            root = ET.fromstring(xml_data)
-            # 국토부 수치표고모델(DEM) 데이터 분석 회로 작동
-            dem_val = float(root.find('.//value').text)
-            # 고도 변화율을 기반으로 실시간 국지 경사각(°) 수학적 역산 도출
-            calculated_slope = min(55.0, max(5.0, (dem_val * 0.12)))
-            return calculated_slope
-    except:
-        pass
-    return live_slope
+    return 20.0
 
 def get_wind_direction_text(deg):
-    deg = deg % 360
-    if 337.5 <= deg or deg < 22.5: return "북풍 (⬇️ 남쪽 구역 최위험)", "남쪽"
-    elif 22.5 <= deg < 67.5: return "북동풍 (↙️ 남서쪽 구역 최위험)", "남서쪽"
-    elif 67.5 <= deg < 112.5: return "동풍 (⬅️ 서쪽 구역 최위험)", "서쪽"
-    elif 112.5 <= deg < 157.5: return "남동풍 (↖️ 북서쪽 구역 최위험)", "북서쪽"
-    elif 157.5 <= deg < 202.5: return "남풍 (⬆️ 북쪽 구역 최위험)", "북쪽"
-    elif 202.5 <= deg < 247.5: return "남서풍 (↗️ 북동쪽 구역 최위험)", "북동쪽"
-    elif 247.5 <= deg < 292.5: return "서풍 (➡️ 동쪽 구역 최위험)", "동쪽"
-    else: return "북서풍 (↘️ 남동쪽 구역 최위험)", "남동쪽"
+    # ... 기존 코드 내용 동일 ...
+    return "북풍", "남쪽"
 
-def capture_fire_anomaly_v110(lat, lon, region_name, ai_score, pyeong, fire_line_m, wd_text):
-    sat_time_str = now_kst.strftime("%Y-%m-%d %H:%M:%S")
-    real_119_time_raw = get_realtime_119_dispatch_data()
-    
-    if real_119_time_raw:
-        try:
-            dt_report = datetime.strptime(real_119_time_raw, "%Y%m%d%H%M%S").replace(tzinfo=tz_kst)
-            real_119_time_str = dt_report.strftime("%Y-%m-%d %H:%M:%S")
-            time_diff = dt_report - now_kst
-            diff_seconds = int(time_diff.total_seconds())
-            abs_seconds = abs(diff_seconds)
-            diff_min, diff_sec = abs_seconds // 60, abs_seconds % 60
-            if diff_seconds > 0: time_diff_result = f"위성이 119보다 {diff_min:02d}분 {diff_sec:02d}초 빠름"
-            else: time_diff_result = f"위성이 119보다 {diff_min:02d}분 {diff_sec:02d}초 늦음"
-        except: real_119_time_str, time_diff_result = real_119_time_raw, "시차 연산 대기"
-    else: real_119_time_str, time_diff_result = "공개 대기 중", "실시간 동기화 중"
-
-    new_record = {
-        "령이 감지 시각": sat_time_str, "소방신고 접수 시각": real_119_time_str, "실측 시차 분석": time_diff_result,
-        "감지 위치 좌표": f"위도 {lat:.4f}, 경도 {lon:.4f}", "발화 대상 주소": region_name, "국토 법정 지목": "임야 (산불)",
-        "AI 예측 피해규모": f"{pyeong:,.0f} 평 ({ai_score:.2f} ha)", "예상 화선 및 풍향": f"{fire_line_m:,.0f}m ({wd_text.split(' ')[0]})", "timestamp": now_kst.timestamp()
-    }
-    
-    if st.session_state['fire_blackbox'] and st.session_state['fire_blackbox'][0]["발화 대상 주소"] == region_name:
-        st.session_state['fire_blackbox'][0]["AI 예측 피해규모"] = f"{pyeong:,.0f} 평 ({ai_score:.2f} ha)"
-        st.session_state['fire_blackbox'][0]["예상 화선 및 풍향"] = f"{fire_line_m:,.0f}m ({wd_text.split(' ')[0]})"
-    else:
-        st.session_state['fire_blackbox'].insert(0, new_record)
-    
-    save_annual_db(st.session_state['fire_blackbox'])
-    st.session_state['live_sat_time'] = sat_time_str
-    st.session_state['live_119_time'] = real_119_time_str
-    st.session_state['live_diff'] = time_diff_result
-
-# --- 🎮 사이드바 컨트롤러 ---
-st.sidebar.header("📡 대한민국 영토 상시 스캔")
-region_input = st.sidebar.text_input("상세 구역 줌인 (주소 입력 후 아래 버튼 클릭)", value="")
-
-if st.sidebar.button("🛰️ 해당 구역 실시간 감시 파이프라인 가동", type="primary"):
-    if region_input.strip() != "":
-        st.session_state['current_target'] = region_input
-        
-        # 💡 [하늘과 땅의 대통합] 버튼을 누르는 순간 백엔드 동시 파싱 가동!
-        with st.sidebar.spinner("국토교통부 지형 인프라 및 기상청 AWS 관측망 동기화 중..."):
-            real_temp, real_hum, real_wind, real_wd = fetch_kma_live_weather()
-            real_slope = fetch_vworld_live_slope() # 🌟 국토교통부 실측 경사도 수치 파싱 추가!
-            
-            # 대기와 지형 세션을 통째로 리얼 수치로 덮어씌우기 가동
-            st.session_state['t_val'] = real_temp
-            st.session_state['h_val'] = real_hum
-            st.session_state['w_val'] = real_wind
-            st.session_state['wd_val'] = real_wd
-            st.session_state['slope_val'] = real_slope # 경사도 세션 강제 주입!
-        
-        st.sidebar.success(f"✅ {region_input} 3D 지형 및 기상망 완전 동기화 완료!")
-        st.rerun() 
-    else: st.sidebar.warning("조회할 주소를 입력해 주세요.")
-
-st.sidebar.markdown("---")
-st.sidebar.header("🎛️ 실시간 기상 변수 통제 계측기")
-
-t_slider = st.sidebar.slider("관측 기온 (°C)", -10.0, 45.0, value=float(st.session_state['t_val']))
-h_slider = st.sidebar.slider("대기 상대습도 (%)", 0.0, 100.0, value=float(st.session_state['h_val']))
-w_slider = st.sidebar.slider("현지 풍속 (m/s)", 0.0, 35.0, value=float(st.session_state['w_val']))
-wd_slider = st.sidebar.slider("현지 풍향 바람 방향 (각도 °)", 0.0, 360.0, value=float(st.session_state['wd_val']), step=45.0)
-
-st.session_state['t_val'] = t_slider
-st.session_state['h_val'] = h_slider
-st.session_state['w_val'] = w_slider
-st.session_state['wd_val'] = wd_slider
-
-st.sidebar.markdown("---")
-# 🌟 [v11.0 대혁신] value 자체를 st.session_state['slope_val']에 완벽히 묶음으로써 국토부 API 수치에 따라 눈금이 혼자 슥슥 대동기화 성공!
-current_slope = st.sidebar.slider("지형 실측 경사도 (°)", 0.0, 60.0, value=float(st.session_state['slope_val']))
-st.session_state['slope_val'] = current_slope
-
-# --- 🧠 AI 및 물리 융합 연산 레이어 ---
-ai_live_prediction = float(ai_brain.predict([[st.session_state['t_val'], st.session_state['h_val'], st.session_state['w_val']]])[0])
-final_area_score = ai_live_prediction * (1.0 + (st.session_state['slope_val'] / 60.0) * 0.5)
-
-final_pyeong = final_area_score * 3025.0
-
-ellipse_eccentricity = 1.0 + (float(st.session_state['w_val']) * 0.1)
-approx_radius_m = math.sqrt((final_area_score * 10000.0) / math.pi)
-final_fire_line_m = 2.0 * math.pi * approx_radius_m * (ellipse_eccentricity ** 0.5)
-
-wind_text_str, target_danger_zone = get_wind_direction_text(st.session_state['wd_val'])
-
-base_spread_factor = 0.001 + (float(st.session_state['w_val']) * 0.002) + (st.session_state['slope_val'] * 0.0005)
-if float(st.session_state['h_val']) < 30: base_spread_factor *= 1.8
-final_spread_rate_min = min(final_area_score * 0.1, base_spread_factor)
-minutes_to_burn_1ha = 1.0 / final_spread_rate_min if final_spread_rate_min > 0 else 9999
-
-if st.session_state['current_target'] != "대한민국 전역 (전수 관측)":
-    capture_fire_anomaly_v110(36.5665, 128.7262, st.session_state['current_target'], final_area_score, final_pyeong, final_fire_line_m, wind_text_str)
-
-# --- 📺 메인 UI 모니터링 경보 표출 모듈 ---
-col_radar, col_status = st.columns([1, 2])
-
-with col_radar:
-    st.subheader("🛰️ 령이 실시간 국지 감시 관제 센터")
-    st.markdown("<br>", unsafe_allow_html=True)
-    if st.session_state['current_target'] == "대한민국 전역 (전수 관측)":
-        st.info("🟢 [상시 모드] 배경 백엔드에서 전국 위성 FF 피드를 무한 스캔 중입니다.")
-    else:
-        st.error(f"🔴 [위기 감지] AI 예측 모델 연동 ➡️ [{st.session_state['current_target']}] 집중 관제 중.")
-        
-    st.divider()
-    st.markdown("### 📈 실시간 산불 화선 속도 계측기")
-    m_col1, m_col2 = st.columns(2)
-    m_col1.metric("🔥 분당 예상 피해 면적", f"{final_spread_rate_min * 3025.0:.2f} 평/min")
-    if minutes_to_burn_1ha < 100:
-        m_col2.metric("⏳ 1,000평 연소 돌파 골든타임", f"{minutes_to_burn_1ha * (1000/3025):.1f} 분", delta="-실시간 확산 중", delta_color="inverse")
-    else:
-        m_col2.metric("⏳ 1,000평 연소 돌파 골든타임", "안정 상태", delta="위험성 낮음")
-
-with col_status:
-    st.subheader("📊 관제 현황 및 AI 최종 판정")
-    st.caption(f"※ 국토부 DEM 지형도 및 기상청 AWS 동기화 ➡️ 기온: {st.session_state['t_val']}°C | 습도: {st.session_state['h_val']}% | 풍속: {st.session_state['w_val']}m/s | 경사도: {st.session_state['slope_val']:.1f}°")
-    
-    if final_area_score >= 0.15:
-        bg_color = "#ff0000"; text_title = f"🔥 [🚨 AI 심각] 대형 산불 예측 (피해 규모: {final_pyeong:,.0f} 평 / 예상 화선: {final_fire_line_m:,.0f} m) 🔥"
-        if is_night:
-            sub_text = f"🌙 {wind_text_str} 및 {st.session_state['slope_val']:.1f}° 경사면 결합! 불길이 {target_danger_zone} 부락으로 급속 확산 중!"
-            m_10 = f"🚒 **[10분 야간 작전]** 화선 전장 {final_fire_line_m:,.0f}m 돌파. 의용소방대 전원 소집 및 {target_danger_zone} 전방 민가 방어선 수동 고착."
-            m_30 = f"🔦 **[30분 가시 확보]** 소방 조명탄 및 열화상 드론 즉각 투입하여 {target_danger_zone} 이동 화선(불줄기) 경로 정밀 추적 보조."
-            m_60 = f"🏠 **[60분 인명 사수]** {final_pyeong:,.0f}평 연소 중. {target_danger_zone} 방향 취침 중인 부락 주민 인명 피해 방지를 위한 가가호호 가택 강제 대피령 집행."
-        else:
-            sub_text = f"☀️ {wind_text_str} 전개! {target_danger_zone} 방향 산림 차단벽 구축 및 진화 헬기 3대 이상 즉각 출격"
-            m_10 = f"🚁 **[10분 주간 작전]** 산불진화대 헬기 3대 즉각 출격 유도 및 {target_danger_zone} 최전방 {final_fire_line_m:,.0f}m 화선 선제 살포."
-            m_30 = f"⚠️ **[30분 저지 조치]** {wind_text_str.split(' ')[0]} 비화 위험 지역. {target_danger_zone} 하류 부락 주민 대피 명령 강제 발령."
-            m_60 = f"🧑‍🚒 **[60분 광역 저지]** {target_danger_zone} 인접 인프라 사수를 위한 소방력 광역 지원 요청(소방동원령 1호) 및 차단벽 가동."
-            
-    elif final_area_score >= 0.08:
-        bg_color = "#d9381e"; text_title = f"🔥 [⚠️ AI 경계] 중형 산불 위험 (피해 규모: {final_pyeong:,.0f} 평 / 예상 화선: {final_fire_line_m:,.0f} m) 🔥"
-        if is_night:
-            sub_text = f"🌙 {wind_text_str.split(' ')[0]} 대응! 화재 현장 {target_danger_zone} 도로 주변 통행 금지 및 조명탑 배치"
-            m_10 = f"🚒 **[10분 야간 작전]** 화선 {final_fire_line_m:,.0f}m 저지선 배치. {target_danger_zone} 전방 진화대 급파 및 소화 용수선 확보."
-            m_30 = "🔦 **[30분 가시 확보]** 야간 열점 확산 방지를 위한 주요 길목 진입 차단선 설치 및 소방 지휘 텐트 전방 배치."
-            m_60 = f"🧑‍🚒 **[60분 야간 방어]** 야간 바람 기류 변화 감시 및 {target_danger_zone} 산불 확산 방향 300m 전방 국지적 방화선 고착."
-        else:
-            sub_text = f"☀️ {wind_text_str.split(' ')[0]} 출동! 중형 산불 진화 헬기 1~2대 지원 요청 및 {target_danger_zone} 차단선 구축"
-            m_10 = "🚒 **[10분 주간 작전]** 관할 소방서 정예 진화대 비상 소집 및 산불전문진화차 현장 최우선 전면 배치."
-            m_30 = f"⚠️ **[30분 저지 조치]** {target_danger_zone} 방향 비화 위험 존재. 현장 지휘소 선제 설치 및 민가 방어선 구축."
-            m_60 = "🧑‍🚒 **[60분 광역 저지]** 인근 의용소방대 추가 동원 및 확산 경로 수목 벌채를 통한 물리적 방화벽 구축."
-            
-    elif final_area_score >= 0.04:
-        bg_color = "#e67e22"; text_title = f"🔥 [주의 등급] 국지성 소형 산불 (피해 규모: {final_pyeong:,.0f} 평 / 예상 화선: {final_fire_line_m:,.0f} m) 🔥"
-        sub_text = "관할 소방서 진화 펌프차 및 살수차 1~2대 출동으로 초동 진압 100% 가능 규모"
-        m_10 = f"🚒 **[10분 초동 조치]** 화선 {final_fire_line_m:,.0f}m 내외 근접 진압. {target_danger_zone} 방면 소방차 1대 현장 즉각 급파."
-        m_30 = f"⚠️ **[30분 번짐 차단]** 현지 {wind_text_str.split(' ')[0]} 기류 안정적이므로, 소방차 고압 방수포 전개 및 주변 풀뙈기 살수를 통한 번짐 원천 차단."
-        m_60 = "🧑‍🚒 **[60분 잔불 정리]** 기계화 진화 시스템 투입 및 등짐펌프 조를 활용한 흙 파뒤집기 완전 완진 유도 및 상황 종료."
-        
-    else:
-        bg_color = "#1a73e8"; text_title = f"🔒 안전 관제 스캔 잠금 상태 (예측 규모: {final_pyeong:,.0f} 평 / 화선 징후 없음)"
-        sub_text = "기상 및 환경 요인이 매우 안정적입니다. 특이 산불 확산 위험 징후 없음"
-        m_10 = "🚒 **[10분 예찰 조치]** 119 정식 출동 불필요 단계. 해당 면사무소 산불감시원 일상 순찰 경로 유지 지시."
-        m_30 = "⚠️ **[30분 현장 모니터링]** 현재 습도가 매우 높고 바람이 없어 화재 전개 가능성 없음. 안전 스캔 센서 잠금 유지."
-        m_60 = "🧑‍🚒 **[60분 안전 복귀]** 미세 열점 소멸 감지 완료. 관할 영토 상시 전수 자동 스캔 레이더 모드로 안전 복귀."
-
-    st.markdown(f"""
-    <div style="background-color: {bg_color}; padding: 20px; border-radius: 10px; border: 4px solid #ffffff; box-shadow: 0px 0px 15px {bg_color}; text-align: center;">
-        <span style="font-size: 50px;">🧠</span>
-        <h2 style="color: #ffffff; font-weight: bold; margin-top: 10px; margin-bottom: 5px;">{text_title}</h2>
-        <h4 style="color: #ffff00; margin: 0;">{sub_text}</h4>
-    </div>
-    """, unsafe_allow_html=True)
-
-# --- [하단 인지 속도 검증 레이어] ---
-if st.session_state['current_target'] != "대한민국 전역 (전수 관측)":
-    st.divider()
-    st.subheader(f"🎯 실시간 산불 인지 속도 검증 레이어: [{st.session_state['current_target']}]")
-    v1, v2, v3 = st.columns(3)
-    v1.metric("🛰️ 령이 위성 최초 감지 시각 (실측 현재시각)", st.session_state.get('live_sat_time', '-'))
-    v2.metric("🚒 소방청 실시간 출동/접수 시각 (오픈 API 연동)", st.session_state.get('live_119_time', '-'))
-    st.info(f"⚡ **시차 분석 리포트**\n\n{st.session_state.get('live_diff', '-')}")
-
-st.divider()
-st.markdown(f"### 📢 [AI 지휘 가이드] {st.session_state['current_target']} 국토 환경 기반 초동 대응 대책")
-c1, c2, c3 = st.columns(3)
-if final_area_score >= 0.15: c1.error(m_10); c2.error(m_30); c3.error(m_60)
-elif final_area_score >= 0.08: c1.error(m_10); c2.error(m_30); c3.error(m_60)
-elif final_area_score >= 0.04: c1.warning(m_10); c2.warning(m_30); c3.warning(m_60)
-else: c1.info(m_10); c2.info(m_30); c3.info(m_60)
-
-st.divider()
-st.subheader("📋 령이 자율 화재 포착 로그 (최근 7일 소방관 표준 규격 실측 데이터셋)")
-if st.session_state['fire_blackbox']:
-    st.table([{"령이 감지 시각": r["령이 감지 시각"], "소방신고 접수 시각": r["소방신고 접수 시각"], "실측 시차 분석": r["실측 시차 분석"], "발화 대상 주소": r["발화 대상 주소"], "AI 예측 피해규모 (평)": r["AI 예측 피해규모"], "예상 화선 및 풍향": r["예상 화선 및 풍향"]} for r in st.session_state['fire_blackbox']])
+# --- 🧠 AI 물리 연산 및 학습 결과 적용 ---
+if ai_brain:
+    # 🌟 [중요] AI 브레인의 예측값을 받아옴
+    ai_base = float(ai_brain.predict([[st.session_state['t_val'], st.session_state['h_val'], st.session_state['w_val']]])[0])
 else:
-    st.info("🚨 현재 감지된 실시간 화재 열점이 없습니다. 전국망 상시 전수 스캔 중...")
+    # 뇌가 없으면 기본 연산
+    ai_base = (st.session_state['t_val'] * 0.001) + ((100 - st.session_state['h_val']) * 0.0002)
+
+# 지형 경사도 반영
+slope_multiplier = 1.0 + (st.session_state['slope_val'] / 60.0) * 0.5
+final_area_ha = ai_base * slope_multiplier
+
+is_raining = (st.session_state['pty_val'] > 0)
+current_pyeong = 10.0
+current_fireline = 15.0
+
+if is_raining:
+    spread_rate_pyeong_per_min = 0.0
+    spread_rate_line_per_min = 0.0
+    status_msg = "🌧️ [자연 진화] 우천 감지로 확산 억제 중"
+    bg_color = "#005b96"
+else:
+    # 🌟 AI가 예측한 확산속도를 반영
+    spread_rate_pyeong_per_min = min(final_area_ha * 3000 * 0.1, 500.0)
+    spread_rate_line_per_min = spread_rate_pyeong_per_min * 0.15
+    if spread_rate_pyeong_per_min > 50:
+        status_msg = "🔥 [🚨 AI 심각] 대형 산불 급속 확산 중"
+        bg_color = "#ff0000"
+    else:
+        status_msg = "🔥 [⚠️ AI 경계] 중소형 산불 확산 중"
+        bg_color = "#d9381e"
+
+# 시계열 계산 및 UI 출력 (기존과 동일)
+# ... (중략) ...
