@@ -11,6 +11,9 @@ import pandas as pd
 from sklearn.ensemble import RandomForestRegressor
 import joblib
 
+# 🔗 구글 스프레드시트 실시간 DB 도킹을 위한 라이브러리
+from streamlit_gsheets import GSheetsConnection
+
 st.set_page_config(page_title="국가 화재 통합 관제 AI 령이", page_icon="⚠️", layout="wide")
 
 if "SEC_KEY" in st.secrets: 
@@ -24,10 +27,9 @@ current_hour = now_kst.hour
 is_night = (current_hour >= 19 or current_hour < 6)
 
 st.title("🚨 실시간 화재 조기경보 및 통합 관제 플랫폼 '령이'")
-st.markdown(f"**현재 관제 상태:** {'🌙 야간 전술 모드' if is_night else '☀️ 주간 관제 모드'} | **Core Engine:** 🧠 6대 지형·기상 변수 결합형 SOP 자율 처방 엔진 v17.0")
+st.markdown(f"**현재 관제 상태:** {'🌙 야간 전술 모드' if is_night else '☀️ 주간 관제 모드'} | **Core Engine:** 🛰️ Google Sheets DB 실시간 영구 연동 엔진 v18.5")
 st.divider()
 
-DB_FILE = "ryong_i_annual_db.json"
 MODEL_FILE = "ryong_i_ai_brain.pkl"
 
 # --- 🛰️ 대한민국 전국 주요 기상 관측소(STN) 마스터 풀 ---
@@ -65,15 +67,12 @@ def load_ryong_i_ai():
 
 ai_brain, ai_status_message = load_ryong_i_ai()
 
-if 'fire_blackbox' not in st.session_state:
-    if os.path.exists(DB_FILE):
-        try: 
-            with open(DB_FILE, "r", encoding="utf-8") as f: 
-                st.session_state['fire_blackbox'] = json.load(f)
-        except: 
-            st.session_state['fire_blackbox'] = []
-    else: 
-        st.session_state['fire_blackbox'] = []
+# 🗄️ 구글 스프레드시트 커넥션 안전 초기화 레이어 (문법 오류 수정)
+try:
+    conn = st.connection("gsheets", type=GSheetsConnection)
+    df_cloud_db = conn.read(ttl="5s") 
+except:
+    df_cloud_db = pd.DataFrame(columns=["령이 감지 시각", "소방신고 접수 시각", "실측 시차 분석", "발화 대상 주소", "AI 예측 피해규모 (평)", "예상 화선 및 풍향"])
 
 def fetch_kma_live_weather(stn_id):
     live_t, live_h, live_w, live_wd = 20.0, 70.0, 1.5, 180.0
@@ -104,31 +103,28 @@ def get_wind_direction_text(deg):
     else: return "북서풍 (↘️ 남동쪽 위험)", "남동쪽"
 
 # =========================================================================================
-# 🚒 [핵심 복원 및 고도화] 6대 하이브리드 변수 결합형 SOP 자율 텍스트 빌더 엔진
+# 🚒 6대 하이브리드 변수 결합형 SOP 자율 텍스트 빌더 엔진 (오타 교정 완료)
 # =========================================================================================
 def get_dynamic_sop_manual(area_ha, t, h, w, slope, danger_zone, is_night_mode):
-    # 1. 산불 규모 단계 판단
     if area_ha >= 0.15: level_title = "🔴 [SOP 3단계] 광역 초광역 비상대응"
     elif area_ha >= 0.08: level_title = "🟠 [SOP 2단계] 관할 구조대 전원 투입"
     else: level_title = "🟡 [SOP 1단계] 초동 진압 관할 출동"
 
-    # 2. 기상 조건 세부 분석 마킹
     dry_text = "수목 낙엽층 흡수율 제로(0%) 판정. 일반 용수 진화 효율 저하로 화학 방화제(지연제) 혼합 살포 요망." if h < 25 else "일반 용수 위주 방수 전술 전개 가능."
     wind_text = f"풍속 {w}m/s 강풍 돌풍 발생. {danger_zone} 하류 골짜기 풍하측 300m 비화(날아가는 불 씨) 감시조 의무 조 편성." if w >= 5.0 else f"풍속 {w}m/s 안정 기류. 화선 전면 직접 진압 위주 전개."
     slope_text = f"경사도 {slope}° 급경사 험준 지형. 대원 도보 진입 지연 및 추락 위험 발생. 기계화 진화대 로프 확보 및 소방 드론 전방 정찰 유도 필수." if slope >= 25.0 else f"경사도 {slope}° 완경사 지형. 진화 차량 펌프선 전방 임도 직접 진입 및 방수선 즉각 구축."
 
-    # 3. 분 단위 최적 행동 지침 조립 (시간/기상/지형 하이브리드)
     if is_night_mode:
         m10 = f"🚒 **[10분 야간 전술]** 진화 헬기 즉각 철수 완료. 관할 의용소방대 야간 비상 소집령 발령. 현시각 기온 {t}°C 하강 기류 인지, {danger_zone} 부락 민가 경계선에 수화 고착 방어차량 배치."
         m30 = f"🔦 **[30분 가시 확보]** 소방 조명차 2대 및 고성능 열화상 드론 급파. 야간 골바람에 의한 {danger_zone} 능선 이동 속도 역산 개시. {wind_text}"
         m60 = f"🏠 **[60분 인명 사수]** {danger_zone} 방향 직격 타깃 부락 취침 주민 전원 강제 가택 대피령 집행 및 대피소 이송. {slope_text}"
     else:
-        m10 = f"🚁 **[10분 주간 전술]** 산림청·소방 초대형 진화헬기 3대 이상 즉각 출격 격상 요청. 현시각 기온 {t}°C 고온 상승 기류 반영, {danger_zone} 최전방 주 화선에 선제적 다각 살포 감행."
+        # 오타 수정 완료 파트 (Corporate ➔ 🚒 이모지)
+        m10 = f"🚒 **[10분 주간 전술]** 산림청·소방 초대형 진화헬기 3대 이상 즉각 출격 격상 요청. 현시각 기온 {t}°C 고온 상승 기류 반영, {danger_zone} 최전방 주 화선에 선제적 다각 살포 감행."
         m30 = f"⚠️ **[30분 저지 조치]** 산불전문진화대 및 특수진화대 지상 인력 임도 배치. {danger_zone} 골짜기 1차 차단벽 구축. {dry_text} {wind_text}"
         m60 = f"🧑‍🚒 **[60분 광역 저지]** 소방동원령 1호 연계 인근 지자체 소방력 20% 교차 응원 분사. {slope_text}"
 
     return level_title, m10, m30, m60
-
 
 # --- 🎮 사이드바 시뮬레이터 통제 장치 ---
 st.sidebar.header("🎛️ 전국 단위 관제 테스트")
@@ -187,7 +183,6 @@ all_cols = r1_cols + r2_cols
 
 for idx, row in df_top10.iterrows():
     with all_cols[idx]:
-        is_top1 = (idx == 0)
         if row["score"] >= FIRE_THRESHOLD:
             badge_html = f"<span style='color:#ff4b4b;font-weight:bold;'>🔥 [위기 단계]</span>"
             border_style = "border: 2px solid #ff4b4b; background-color: #1e1e1e;"
@@ -195,7 +190,7 @@ for idx, row in df_top10.iterrows():
             badge_html = f"<span style='color:#ffaa00;font-weight:bold;'>⚠️ [주의순위 {idx+1}위]</span>"
             border_style = "border: 1px solid #444; background-color: #0e1117;"
             
-        if is_top1 and row["score"] >= FIRE_THRESHOLD:
+        if (idx == 0) and row["score"] >= FIRE_THRESHOLD:
             border_style = "border: 3px dashed #ffff00; background-color: #1c1d24;"
             badge_html += " ⭐ 최악 위험"
 
@@ -207,7 +202,6 @@ for idx, row in df_top10.iterrows():
         </div>
         """, unsafe_allow_html=True)
 st.markdown("<br>", unsafe_allow_html=True)
-
 
 # --- 📍 2단계 & 3단계: 화재 검출 시 시뮬레이션 대책 ---
 if is_fire_detected:
@@ -221,30 +215,42 @@ if is_fire_detected:
     if top_1_target["h"] < 30: spread_factor *= 1.8
     spread_rate_min = min(top_1_target["score"] * 0.1, spread_factor)
     
-    # 🚒 [AI 엔진 연산 완전체 링크] 6대 조건 값을 자율 텍스트 조립 엔진에 완벽 결합
     sop_title, m10, m30, m60 = get_dynamic_sop_manual(
         top_1_target["score"], top_1_target["t"], top_1_target["h"], 
         top_1_target["w"], top_1_target["slope"], danger_zone, is_night
     )
     
-    if not sim_mode:
+    # 🔒 [로그 차단/정밀 적재] 가상 조작 모드가 꺼져있을 때만 구글 스프레드시트에 영구 적재
+    if not sim_mode and 'conn' in locals():
         sat_time_str = now_kst.strftime("%Y-%m-%d %H:%M:%S")
-        new_log = {
-            "령이 감지 시각": sat_time_str, "소방신고 접수 시각": "실시간 동기화 중", "실측 시차 분석": "위성 자율 검출 완료",
-            "발화 대상 주소": top_1_target["addr"], "AI 예측 피해규모 (평)": f"{pyeong:,.0f} 평", "예상 화선 및 풍향": f"{fire_line:,.0f}m ({wd_text.split(' ')[0]})"
-        }
-        if not st.session_state['fire_blackbox'] or st.session_state['fire_blackbox'][0]["발화 대상 주소"] != top_1_target["addr"]:
-            st.session_state['fire_blackbox'].insert(0, new_log)
-            try: 
-                with open(DB_FILE, "w", encoding="utf-8") as f: 
-                    json.dump(st.session_state['fire_blackbox'], f, ensure_ascii=False, indent=4)
-            except: 
+        
+        should_write = True
+        if not df_cloud_db.empty:
+            last_addr = df_cloud_db.iloc[-1]["발화 대상 주소"]
+            if last_addr == top_1_target["addr"]:
+                should_write = False
+                
+        if should_write:
+            new_row = pd.DataFrame([{
+                "령이 감지 시각": sat_time_str,
+                "소방신고 접수 시각": "실시간 동기화 중",
+                "실측 시차 분석": "위성 자율 검출 완료",
+                "발화 대상 주소": top_1_target["addr"],
+                "AI 예측 피해규모 (평)": f"{pyeong:,.0f} 평",
+                "예상 화선 및 풍향": f"{fire_line:,.0f}m ({wd_text.split(' ')[0]})"
+            }])
+            df_updated = pd.concat([df_cloud_db, new_row], ignore_index=True)
+            try:
+                conn.update(data=df_updated)
+                df_cloud_db = df_updated
+            except:
                 pass
 
     st.header(f"📍 [2단계] AI 선별 최우선 추적 관제 구역 ➔ [{top_1_target['city']}시·군] {'🧪 (가상 가동 중)' if sim_mode else ''}")
     col_t1, col_t2 = st.columns([1, 2])
     
     with col_t1:
+        # ⚪ 화이트 폰트 가독성 개편 완료 파트
         st.markdown(f"""
         <div style="background-color: #262730; padding: 20px; border-radius: 8px; border-left: 5px solid #ff4b4b;">
             <h4 style="margin:0 0 10px 0; color:#ff4b4b; font-weight: bold;">🔍 최고 위험 지형/환경 리포트</h4>
@@ -291,10 +297,15 @@ else:
     </div>
     """, unsafe_allow_html=True)
 
-# --- 7일 관측 기록 로그 ---
+# --- 🛰️ 구글 클라우드 DB 실시간 로그 테이블 뷰 ---
 st.divider()
-st.subheader("📋 령이 자율 화재 포착 로그 (7일 이내 실측 매칭 데이터)")
-if st.session_state['fire_blackbox']:
-    st.table(st.session_state['fire_blackbox'])
+st.subheader("📋 령이 자율 화재 포착 로그 (Google Sheets Cloud DB 연동 데이터)")
+if not df_cloud_db.empty:
+    st.table(df_cloud_db.iloc[::-1].reset_index(drop=True))
 else:
-    st.info("🚨 임계치를 초과하여 적재된 실시간 화재 기록이 없습니다.")
+    st.info("🚨 임계치를 초과하여 구글 스프레드로 적재된 실시간 화재 기록이 없습니다.")
+
+# 🔄 24시간 자율 백그라운드 리프레시 트리거
+if not sim_mode:
+    time.sleep(10)
+    st.rerun()
