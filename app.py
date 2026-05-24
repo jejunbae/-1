@@ -24,7 +24,7 @@ current_hour = now_kst.hour
 is_night = (current_hour >= 19 or current_hour < 6)
 
 st.title("🚨 실시간 화재 조기경보 및 통합 관제 플랫폼 '령이'")
-st.markdown(f"**현재 관제 상태:** {'🌙 야간 전술 모드' if is_night else '☀️ 주간 관제 모드'} | **Core Engine:** 🧠 가상 로그 필터링 및 화이트 폰트 가독성 보정 엔진 v16.0")
+st.markdown(f"**현재 관제 상태:** {'🌙 야간 전술 모드' if is_night else '☀️ 주간 관제 모드'} | **Core Engine:** 🧠 6대 지형·기상 변수 결합형 SOP 자율 처방 엔진 v17.0")
 st.divider()
 
 DB_FILE = "ryong_i_annual_db.json"
@@ -103,13 +103,32 @@ def get_wind_direction_text(deg):
     elif 247.5 <= deg < 292.5: return "서풍 (➡️ 동쪽 위험)", "동쪽"
     else: return "북서풍 (↘️ 남동쪽 위험)", "남동쪽"
 
-def get_dynamic_sop_manual(area_ha, danger_zone):
-    if area_ha >= 0.15:
-        return "🔴 [SOP 3단계] 광역 초광역 비상대응", f"🚁 **[10분]** 대형진화헬기 즉각 출격. {danger_zone} 화선 고압 살포.", f"⚠️ **[30분]** 전문진화대 투입, {danger_zone} 골짜기 차단벽 구축.", f"🏠 **[60분]** {danger_zone} 방향 직격 타깃 부락 주민 강제 대피."
-    elif area_ha >= 0.08:
-        return "🟠 [SOP 2단계] 관할 구조대 전원 투입", f"🚒 **[10분]** 진화차 현장 최우선 배치, 헬기 무전 링크 가동.", f"⚠️ **[30분]** {danger_zone} 방면 임도 활용 지상 진화대 배치.", f"🧑‍🚒 **[60분]** 인근 의용소방대 추가 동원, 물리적 방화벽 구축."
+# =========================================================================================
+# 🚒 [핵심 복원 및 고도화] 6대 하이브리드 변수 결합형 SOP 자율 텍스트 빌더 엔진
+# =========================================================================================
+def get_dynamic_sop_manual(area_ha, t, h, w, slope, danger_zone, is_night_mode):
+    # 1. 산불 규모 단계 판단
+    if area_ha >= 0.15: level_title = "🔴 [SOP 3단계] 광역 초광역 비상대응"
+    elif area_ha >= 0.08: level_title = "🟠 [SOP 2단계] 관할 구조대 전원 투입"
+    else: level_title = "🟡 [SOP 1단계] 초동 진압 관할 출동"
+
+    # 2. 기상 조건 세부 분석 마킹
+    dry_text = "수목 낙엽층 흡수율 제로(0%) 판정. 일반 용수 진화 효율 저하로 화학 방화제(지연제) 혼합 살포 요망." if h < 25 else "일반 용수 위주 방수 전술 전개 가능."
+    wind_text = f"풍속 {w}m/s 강풍 돌풍 발생. {danger_zone} 하류 골짜기 풍하측 300m 비화(날아가는 불 씨) 감시조 의무 조 편성." if w >= 5.0 else f"풍속 {w}m/s 안정 기류. 화선 전면 직접 진압 위주 전개."
+    slope_text = f"경사도 {slope}° 급경사 험준 지형. 대원 도보 진입 지연 및 추락 위험 발생. 기계화 진화대 로프 확보 및 소방 드론 전방 정찰 유도 필수." if slope >= 25.0 else f"경사도 {slope}° 완경사 지형. 진화 차량 펌프선 전방 임도 직접 진입 및 방수선 즉각 구축."
+
+    # 3. 분 단위 최적 행동 지침 조립 (시간/기상/지형 하이브리드)
+    if is_night_mode:
+        m10 = f"🚒 **[10분 야간 전술]** 진화 헬기 즉각 철수 완료. 관할 의용소방대 야간 비상 소집령 발령. 현시각 기온 {t}°C 하강 기류 인지, {danger_zone} 부락 민가 경계선에 수화 고착 방어차량 배치."
+        m30 = f"🔦 **[30분 가시 확보]** 소방 조명차 2대 및 고성능 열화상 드론 급파. 야간 골바람에 의한 {danger_zone} 능선 이동 속도 역산 개시. {wind_text}"
+        m60 = f"🏠 **[60분 인명 사수]** {danger_zone} 방향 직격 타깃 부락 취침 주민 전원 강제 가택 대피령 집행 및 대피소 이송. {slope_text}"
     else:
-        return "🟡 [SOP 1단계] 초동 진압 관할 출동", f"🚒 **[10분]** 관할 안전센터 진화 펌프차 현장 급파.", f"⚠️ **[30분]** 고압 방수포 전개, 건조 수목 낙엽층 집중 살수.", f"🧑‍🚒 **[60분]** 기계화 등짐펌프 조 투입 잔불 정리 및 예찰."
+        m10 = f"🚁 **[10분 주간 전술]** 산림청·소방 초대형 진화헬기 3대 이상 즉각 출격 격상 요청. 현시각 기온 {t}°C 고온 상승 기류 반영, {danger_zone} 최전방 주 화선에 선제적 다각 살포 감행."
+        m30 = f"⚠️ **[30분 저지 조치]** 산불전문진화대 및 특수진화대 지상 인력 임도 배치. {danger_zone} 골짜기 1차 차단벽 구축. {dry_text} {wind_text}"
+        m60 = f"🧑‍🚒 **[60분 광역 저지]** 소방동원령 1호 연계 인근 지자체 소방력 20% 교차 응원 분사. {slope_text}"
+
+    return level_title, m10, m30, m60
+
 
 # --- 🎮 사이드바 시뮬레이터 통제 장치 ---
 st.sidebar.header("🎛️ 전국 단위 관제 테스트")
@@ -202,9 +221,12 @@ if is_fire_detected:
     if top_1_target["h"] < 30: spread_factor *= 1.8
     spread_rate_min = min(top_1_target["score"] * 0.1, spread_factor)
     
-    sop_title, m10, m30, m60 = get_dynamic_sop_manual(top_1_target["score"], danger_zone)
+    # 🚒 [AI 엔진 연산 완전체 링크] 6대 조건 값을 자율 텍스트 조립 엔진에 완벽 결합
+    sop_title, m10, m30, m60 = get_dynamic_sop_manual(
+        top_1_target["score"], top_1_target["t"], top_1_target["h"], 
+        top_1_target["w"], top_1_target["slope"], danger_zone, is_night
+    )
     
-    # 🔒 [핵심 고도화] 시뮬레이션(강제 조작) 모드가 아닐 때만 찐 관측 로그 적재 수행
     if not sim_mode:
         sat_time_str = now_kst.strftime("%Y-%m-%d %H:%M:%S")
         new_log = {
@@ -223,7 +245,6 @@ if is_fire_detected:
     col_t1, col_t2 = st.columns([1, 2])
     
     with col_t1:
-        # ⚪ [핵심 고도화] 다크 모드 배경에서 시인성을 확보하기 위해 <p> 태그 내부 글씨체를 선명한 화이트(#ffffff)로 전면 마크업 교정
         st.markdown(f"""
         <div style="background-color: #262730; padding: 20px; border-radius: 8px; border-left: 5px solid #ff4b4b;">
             <h4 style="margin:0 0 10px 0; color:#ff4b4b; font-weight: bold;">🔍 최고 위험 지형/환경 리포트</h4>
