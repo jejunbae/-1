@@ -3,4 +3,5 @@ pandas
 scikit-learn
 joblib
 requests
-st-gsheets-connection
+st-theme
+streamlit-gsheets
