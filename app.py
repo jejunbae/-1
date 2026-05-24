@@ -26,12 +26,12 @@ current_hour = now_kst.hour
 is_night = (current_hour >= 19 or current_hour < 6)
 
 st.title("🚨 실시간 전국 산불 조기경보 및 통합 관제 플랫폼 '령이'")
-st.markdown(f"**현재 관제 상태:** {'🌙 야간 전술 모드' if is_night else '☀️ 주간 관제 모드'} | **Core Engine:** 🧠 전국망 자율 예측 및 대화형 시뮬레이션 인프라 v18.0")
+st.markdown(f"**현재 관제 상태:** {'🌙 야간 전술 모드' if is_night else '☀️ 주간 관제 모드'} | **Core Engine:** 🧠 전국망 시공간 자율 융합 연산 엔진 v20.0")
 st.divider()
 
 MODEL_FILE = "ryong_i_ai_brain.pkl"
-DB_FILE = "ryong_i_annual_db.json"               # 기존 119 대조용 블랙박스 파일
-SENSOR_LOG_FILE = "ryong_i_sensor_logs.json"     # ✨ [신규] 2주간의 전 권역 실시간 환경/예측 누적 파일
+DB_FILE = "ryong_i_annual_db.json"               
+SENSOR_LOG_FILE = "ryong_i_sensor_logs.json"     
 
 # --- 🗺️ 전국 모니터링 고유 관측소 데이터셋 ---
 NATIONWIDE_STN_MAP = {
@@ -56,7 +56,6 @@ def load_ryong_i_ai():
 ai_brain, ai_status_message = load_ryong_i_ai()
 st.sidebar.info(ai_status_message)
 
-# --- 📥 블랙박스 및 센서로그 세션 초기화 ---
 if 'fire_blackbox' not in st.session_state:
     if os.path.exists(DB_FILE):
         try:
@@ -124,17 +123,13 @@ def get_dynamic_sop_manual(area_ha, is_night_mode, danger_zone):
         m60 = "🧑‍🚒 기계화 등짐펌프 조 투입 잔불 정리 및 완진 판정 후 예찰조 전환."
     return level, m10, m30, m60
 
-# ✨ [신규 핵심] 2주 상시 감지 환경 기록 파이썬 로깅 시스템
 def save_sensor_live_log(records_list):
     log_data = []
     if os.path.exists(SENSOR_LOG_FILE):
         try:
             with open(SENSOR_LOG_FILE, "r", encoding="utf-8") as f: log_data = json.load(f)
         except: log_data = []
-        
     current_time_str = now_kst.strftime("%Y-%m-%d %H:%M:%S")
-    
-    # 7개 권역 전체의 실시간 기상 상태와 예측치를 리스트 구조로 결합하여 아카이빙
     snapshot = {
         "감지 시각": current_time_str,
         "전국 권역 환경 스냅샷": [
@@ -145,40 +140,17 @@ def save_sensor_live_log(records_list):
             } for r in records_list
         ]
     }
-    
-    # 중복 저장 방지용 (최근 감지 시간 대조)
     if not log_data or log_data[-1]["감지 시각"] != current_time_str:
         log_data.append(snapshot)
-        
-        # ⚠️ [데이터 다이어트 설정] 2주일(14일)이 지난 기록은 저장 공간 효율화를 위해 자동 퍼지(삭제)
         cutoff_time = now_kst - timedelta(days=14)
-        filtered_log_data = []
-        for log in log_data:
-            try:
-                log_time = datetime.strptime(log["감지 시각"], "%Y-%m-%d %H:%M:%S").replace(tzinfo=tz_kst)
-                if log_time >= cutoff_time: filtered_log_data.append(log)
-            except: filtered_log_data.append(log)
-            
-        with open(SENSOR_LOG_FILE, "w", encoding="utf-8") as f:
-            json.dump(filtered_log_data, f, ensure_ascii=False, indent=4)
+        filtered_log_data = [log for log in log_data if datetime.strptime(log["감지 시각"], "%Y-%m-%d %H:%M:%S").replace(tzinfo=tz_kst) >= cutoff_time]
+        with open(SENSOR_LOG_FILE, "w", encoding="utf-8") as f: json.dump(filtered_log_data, f, ensure_ascii=False, indent=4)
 
-# 소방청 시차 대비용 기존 블랙박스 저장소 고착
 def save_blackbox_log(highest_row):
     sat_time_str = now_kst.strftime("%Y-%m-%d %H:%M:%S")
     real_119_time_raw = get_realtime_119_dispatch_data()
+    real_119_time_str, time_diff_result = ("공개 대기 중", "실시간 동기화 중") if not real_119_time_raw else (real_119_time_raw, "시차 연산 대기")
     
-    if real_119_time_raw:
-        try:
-            dt_report = datetime.strptime(real_119_time_raw, "%Y%m%d%H%M%S").replace(tzinfo=tz_kst)
-            real_119_time_str = dt_report.strftime("%Y-%m-%d %H:%M:%S")
-            time_diff = dt_report - now_kst
-            diff_seconds = int(time_diff.total_seconds())
-            abs_seconds = abs(diff_seconds)
-            diff_min, diff_sec = abs_seconds // 60, abs_seconds % 60
-            time_diff_result = f"위성이 119보다 {diff_min}분 {diff_sec}초 빠름" if diff_seconds > 0 else f"위성이 119보다 {diff_min}분 {diff_sec}초 늦음"
-        except: real_119_time_str, time_diff_result = real_119_time_raw, "시차 연산 대기"
-    else: real_119_time_str, time_diff_result = "공개 대기 중", "실시간 동기화 중"
-
     new_record = {
         "령이 감지 시각": sat_time_str, "소방신고 접수 시각": real_119_time_str, "실측 시차 분석": time_diff_result,
         "감지 위치 좌표": f"위도 {highest_row['lat']:.4f}, 경도 {highest_row['lon']:.4f}", "발화 대상 주소": highest_row['지역명'], "국토 법정 지목": "임야 (산불)",
@@ -190,62 +162,55 @@ def save_blackbox_log(highest_row):
 
 
 # =========================================================================================
-# 🎮 사이드바 멀티 모드 무대 통제소 (슬라이더 완전 부활)
+# 🎮 사이드바 컨트롤 시스템
 # =========================================================================================
 st.sidebar.header("📡 령이 하이브리드 관제 컨트롤러")
-
-# ✨ [기능 융합] 상시 자율 감제 모드 vs 특정 지역 가상 시뮬레이션 모드 스위치
-control_mode = st.sidebar.radio("⚙️ 시스템 작동 모드 설정", ["🛰️ 24시간 실시간 전국 자율 예찰망", "📐 타깃 지역 가상 가상 시뮬레이터"], index=0)
+control_mode = st.sidebar.radio("⚙️ 시스템 작동 모드 설정", ["🛰️ 24시간 실시간 전국 자율 예찰망", "📐 타깃 지역 가상 시뮬레이터"], index=0)
 
 computed_records = []
 
 if control_mode == "🛰️ 24시간 실시간 전국 자율 예찰망":
-    st.sidebar.success("🟢 실시간 기상청 통신 인프라 가동 중 (수동 조작 비활성화)")
-    with st.spinner("🔄 전국 방재 기상망 동시 연산 중..."):
-        for city_name, info in NATIONWIDE_STN_MAP.items():
-            t, h, w, wd = fetch_kma_live_weather(info["stn"])
-            wd_text, danger_zone = get_wind_direction_text(wd)
+    st.sidebar.success("🟢 실시간 기상청 통신 인프라 가동 중")
+    for city_name, info in NATIONWIDE_STN_MAP.items():
+        t, h, w, wd = fetch_kma_live_weather(info["stn"])
+        wd_text, danger_zone = get_wind_direction_text(wd)
+        
+        try: ai_pred = float(ai_brain.predict([[info["stn"], t, h, w]])[0])
+        except: ai_pred = (t * 0.01) + (w * 0.1)
             
-            try: ai_pred = float(ai_brain.predict([[info["stn"], t, h, w]])[0])
-            except: ai_pred = (t * 0.01) + (w * 0.1)
-                
-            base_calc = (ai_pred * 0.005) + ((100 - h) * 0.001) + (w * 0.01)
-            final_ha = max(0.001, base_calc * (1.0 + (info["slope"] / 60.0) * 1.5))
-            final_pyeong = final_ha * 3025.0
-            
-            ellipse_ecc = 1.0 + (w * 0.1)
-            approx_r = math.sqrt((final_ha * 10000.0) / math.pi)
-            fire_line_m = 2.0 * math.pi * approx_r * (ellipse_ecc ** 0.5)
-            
-            spread_factor = 0.001 + (w * 0.002) + (info["slope"] * 0.0008)
-            if h < 30: spread_factor *= 1.8
-            rate_min = min(final_ha * 0.1, spread_factor)
-            
-            sop_title, m10, m30, m60 = get_dynamic_sop_manual(final_ha, is_night, danger_zone)
-            
-            computed_records.append({
-                "지역명": city_name, "STN": info["stn"], "lat": info["lat"], "lon": info["lon"], "기온(°C)": t, "습도(%)": h, "풍속(m/s)": w, "풍향": wd_text.split(' ')[0], "경사도": f"{info['slope']}°",
-                "위험점수": final_ha * 1000, "예측면적(평/1h)": final_pyeong, "예측화선(m)": fire_line_m, "속도(평/min)": rate_min * 3025.0,
-                "SOP레벨": sop_title, "SOP10": m10, "SOP30": m30, "SOP60": m60, "주소": info["addr"]
-            })
-    # 신규 2주 센서 환경 로그 적재 시스템 자율 작동
+        base_calc = (ai_pred * 0.005) + ((100 - h) * 0.001) + (w * 0.01)
+        final_ha = max(0.001, base_calc * (1.0 + (info["slope"] / 60.0) * 1.5))
+        final_pyeong = final_ha * 3025.0
+        
+        ellipse_ecc = 1.0 + (w * 0.1)
+        approx_r = math.sqrt((final_ha * 10000.0) / math.pi)
+        fire_line_m = 2.0 * math.pi * approx_r * (ellipse_ecc ** 0.5)
+        
+        spread_factor = 0.001 + (w * 0.002) + (info["slope"] * 0.0008)
+        if h < 30: spread_factor *= 1.8
+        rate_min = min(final_ha * 0.1, spread_factor)
+        
+        sop_title, m10, m30, m60 = get_dynamic_sop_manual(final_ha, is_night, danger_zone)
+        
+        computed_records.append({
+            "지역명": city_name, "STN": info["stn"], "lat": info["lat"], "lon": info["lon"], "기온(°C)": t, "습도(%)": h, "풍속(m/s)": w, "풍향": wd_text.split(' ')[0], "경사도": f"{info['slope']}°",
+            "위험점수": final_ha * 1000, "예측면적(평/1h)": final_pyeong, "예측화선(m)": fire_line_m, "속도(평/min)": rate_min * 3025.0,
+            "SOP레벨": sop_title, "SOP10": m10, "SOP30": m30, "SOP60": m60, "주소": info["addr"]
+        })
     save_sensor_live_log(computed_records)
 
 else:
-    # 📐 시뮬레이터 모드가 켜지는 순간 대표님이 직접 조작할 수 있는 슬라이더 활성화!
     st.sidebar.markdown("---")
     sim_city = st.sidebar.selectbox("🎯 가상 실험 대상 지역 선택", list(NATIONWIDE_STN_MAP.keys()))
     info = NATIONWIDE_STN_MAP[sim_city]
     
-    st.sidebar.markdown("**📊 가상 환경 변수 조율 레이어**")
-    sim_t = st.sidebar.slider("가상 온도 (°C)", -10.0, 45.0, 28.0)
-    sim_h = st.sidebar.slider("가상 상대습도 (%)", 0.0, 100.0, 20.0)
-    sim_w = st.sidebar.slider("가상 현지 풍속 (m/s)", 0.0, 35.0, 6.5)
-    sim_wd = st.sidebar.slider("가상 풍향 각도 (°)", 0.0, 360.0, 225.0, step=45.0)
+    sim_t = st.sidebar.slider("가상 온도 (°C)", -10.0, 45.0, 20.0)
+    sim_h = st.sidebar.slider("가상 상대습도 (%)", 0.0, 100.0, 60.0) # 기본 안전 상태 유도하기 위해 습도 업
+    sim_w = st.sidebar.slider("가상 현지 풍속 (m/s)", 0.0, 35.0, 1.5)
+    sim_wd = st.sidebar.slider("가상 풍향 각도 (°)", 0.0, 360.0, 180.0, step=45.0)
     sim_slope = st.sidebar.slider("지형 커스텀 경사도 (°)", 0.0, 60.0, float(info["slope"]))
     
     wd_text, danger_zone = get_wind_direction_text(sim_wd)
-    
     try: ai_pred = float(ai_brain.predict([[info["stn"], sim_t, sim_h, sim_w]])[0])
     except: ai_pred = (sim_t * 0.01) + (sim_w * 0.1)
         
@@ -263,7 +228,6 @@ else:
     
     sop_title, m10, m30, m60 = get_dynamic_sop_manual(final_ha, is_night, danger_zone)
     
-    # 시뮬레이션 데이터를 단일 레코드로 구성하여 화면 피드 동기화
     computed_records.append({
         "지역명": sim_city, "STN": info["stn"], "lat": info["lat"], "lon": info["lon"], "기온(°C)": sim_t, "습도(%)": sim_h, "풍속(m/s)": sim_w, "풍향": wd_text.split(' ')[0], "경사도": f"{sim_slope}°",
         "위험점수": final_ha * 1000, "예측면적(평/1h)": final_pyeong, "예측화선(m)": fire_line_m, "속도(평/min)": rate_min * 3025.0,
@@ -273,19 +237,16 @@ else:
 df_national = pd.DataFrame(computed_records).sort_values(by="위험점수", ascending=False).reset_index(drop=True)
 highest_risk_area = df_national.iloc[0]
 
-# 기존 소방 교차 대조 로그 파일 적재 실행
-if control_mode == "🛰️ 24시간 실시간 전국 자율 예찰망":
+if control_mode == "🛰️ 24시간 실시간 전국 자율 예찰망" and highest_risk_area["위험점수"] >= 120:
     save_blackbox_log(highest_risk_area)
 
 
 # =========================================================================================
-# 📺 령이 통합 대시보드 그래픽 시각화 레이어
+# 📺 UI 파트: 전국 예찰 및 실시간 감지 분기
 # =========================================================================================
 
-# --- 🛰️ 1단계: 실시간 전국 대다발 모니터링 상황판 ---
+# --- 1단계: 실시간 전국 대다발 모니터링 상황판 ---
 st.header("🛰️ [1단계] 전국 권역별 산불 위험도 실시간 자율 랭킹")
-if control_mode == "📐 타깃 지역 가상 가상 시뮬레이터":
-    st.info("📊 시뮬레이터 작동 중: 사이드바에서 조율 중인 특정 지역의 가상 물리 스케일링이 연산 표출됩니다.")
 
 cols = st.columns(max(4, len(df_national)))
 for idx, row in df_national.iterrows():
@@ -308,49 +269,64 @@ for idx, row in df_national.iterrows():
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-# --- 📍 2단계 & 3단계: 최상위 최위험 지역 심층 추적 및 SOP 가이드 처방 ---
-st.header(f"📍 [2·3단계] 최위험 타깃 지역 심층 정밀 추적 ➔ [{highest_risk_area['지역명']}]")
 
-c_info1, c_info2 = st.columns([1, 2])
-with c_info1:
-    st.markdown(f"""
-    <div style="background-color: #262730; padding: 20px; border-radius: 8px; border-left: 5px solid #ffaa00; height: 100%;">
-        <h4 style="margin-top: 0; color: #ffaa00;">🔍 현지 정밀 환경 추적 리포트</h4>
-        <p style="margin: 4px 0;"><b>대표 발화 주소:</b> {highest_risk_area['주소']}</p>
-        <p style="margin: 4px 0;"><b>기온 / 습도:</b> {highest_risk_area['기온(°C)']}°C / {highest_risk_area['습도(%)']}%</p>
-        <p style="margin: 4px 0;"><b>풍속 / 풍향:</b> {highest_risk_area['풍속(m/s)']} m/s ({highest_risk_area['풍향']})</p>
-        <p style="margin: 4px 0;"><b>지형 실측 경사:</b> {highest_risk_area['경사도']}</p>
-        <p style="margin: 4px 0; color: #ffaa00;"><b>🔥 분당 미래 확산 속도:</b> {highest_risk_area['속도(평/min)']:.2f} 평/min</p>
-    </div>
-    """, unsafe_allow_html=True)
-
-with c_info2:
-    st.markdown(f"""
-    <div style="background-color: #111; padding: 20px; border-radius: 8px; border: 2px solid #ff4b4b; text-align: center;">
-        <h3 style="color: #ff4b4b; margin: 0; font-weight: bold;">🚨 AI 예측 1시간 확산 규모: {highest_risk_area['예측면적(평/1h)']:,.0f} 평 (화선: {highest_risk_area['예측화선(m)']:,.0f}m)</h3>
-        <h4 style="color: #ffff00; margin: 8px 0 0 0;">🚒 최우선 관제 가동 지침: {highest_risk_area['SOP레벨']}</h4>
-    </div>
-    """, unsafe_allow_html=True)
+# --- ✨ [개편] 2·3단계 자율 활성화 필터 레이어 ---
+# 위험점수가 120점(심각 임계치)을 넘었을 때만 2단계 정밀 추적과 3단계 SOP 가이드가 화면에 전격 강제 출력됩니다!
+if highest_risk_area["위험점수"] >= 120:
+    st.header(f"🔥 [2·3단계] 전국 확산 위험 정밀 추적 및 소방 SOP 긴급 처방 ➔ [{highest_risk_area['지역명']}]")
     
-    st.markdown("<p style='margin-top:10px;'></p>", unsafe_allow_html=True)
-    sc1, sc2, sc3 = st.columns(3)
-    sc1.error(highest_risk_area['SOP10'])
-    sc2.error(highest_risk_area['SOP30'])
-    sc3.error(highest_risk_area['SOP60'])
+    c_info1, c_info2 = st.columns([1, 2])
+    with c_info1:
+        st.markdown(f"""
+        <div style="background-color: #262730; padding: 20px; border-radius: 8px; border-left: 5px solid #ff0000; height: 100%;">
+            <h4 style="margin-top: 0; color: #ff0000;">🔍 위성 연동 임야 위험 실시간 분석</h4>
+            <p style="margin: 4px 0;"><b>대표 발화 주소:</b> {highest_risk_area['주소']}</p>
+            <p style="margin: 4px 0;"><b>기온 / 습도:</b> {highest_risk_area['기온(°C)']}°C / {highest_risk_area['습도(%)']}%</p>
+            <p style="margin: 4px 0;"><b>풍속 / 풍향:</b> {highest_risk_area['풍속(m/s)']} m/s ({highest_risk_area['풍향']})</p>
+            <p style="margin: 4px 0;"><b>지형 실측 경사:</b> {highest_risk_area['경사도']}</p>
+            <p style="margin: 4px 0; color: #ff0000;"><b>🔥 분당 화선 확산 속도:</b> {highest_risk_area['속도(평/min)']:.2f} 평/min</p>
+        </div>
+        """, unsafe_allow_html=True)
 
-# --- 📅 [신규 추가] 령이가 백그라운드에서 2주간 상시 저장 중인 센서 로그 뷰어 모듈 ---
+    with c_info2:
+        st.markdown(f"""
+        <div style="background-color: #111; padding: 20px; border-radius: 8px; border: 2px solid #ff0000; text-align: center;">
+            <h3 style="color: #ff0000; margin: 0; font-weight: bold;">🚨 임야 대형 산불 징후 포착: 1시간 예측 피해 {highest_risk_area['예측면적(평/1h)']:,.0f} 평 (화선: {highest_risk_area['예측화선(m)']:,.0f}m)</h3>
+            <h4 style="color: #ffff00; margin: 8px 0 0 0;">🚒 최우선 방재 진화 명령: {highest_risk_area['SOP레벨']}</h4>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        st.markdown("<p style='margin-top:10px;'></p>", unsafe_allow_html=True)
+        sc1, sc2, sc3 = st.columns(3)
+        sc1.error(highest_risk_area['SOP10'])
+        sc2.error(highest_risk_area['SOP30'])
+        sc3.error(highest_risk_area['SOP60'])
+else:
+    # 🟢 평상시 산불 위험이 낮은 평화로운 주간에 출력될 안전 안내판
+    st.header("🔒 [2·3단계] 전국 광역 재난 관제 필터")
+    st.markdown("""
+    <div style="background-color: #121824; border: 1px dashed #1a73e8; padding: 30px; border-radius: 10px; text-align: center;">
+        <span style="font-size: 40px;">🛡️</span>
+        <h3 style="color: #1a73e8; margin: 10px 0 5px 0; font-weight: bold;">대한민국 전역 산불 예찰망 청정 상태 유지 중</h3>
+        <p style="color: #8ab4f8; margin: 0; font-size: 14px;">실시간 전국 기상 스캔 결과 위험도 임계치(120점)를 초과한 국지성 산불 위험 지역이 존재하지 않습니다.</p>
+        <p style="color: #5f6368; margin: 5px 0 0 0; font-size: 12px;">※ 위험 상황 강제 모니터링 시뮬레이션은 사이드바에서 '타깃 지역 가상 시뮬레이터' 모드를 활성화한 뒤 가상 기상을 조율하십시오.</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+
+# --- 📅 백그라운드 2주 로그 및 소방 대조 테이블 (항상 유지) ---
 st.divider()
-st.subheader("📅 🛰️ [신규 데이터 허브] 령이 2주간의 전 권역 실시간 기상/예측 누적 저장소 (`ryong_i_sensor_logs.json`)")
-st.caption("※ 이 표는 서버 컴퓨터 내부 파일 시스템에 실시간으로 기록 및 업데이트되는 기상 변수 및 피해 범위 축적물입니다. (2주 보관 필터 작동 중)")
+st.subheader("📋 대한민국 전수 예찰 실시간 종합 상황판")
+st.dataframe(df_national[["지역명", "STN", "기온(°C)", "습도(%)", "풍속(m/s)", "풍향", "경사도", "예측면적(평/1h)", "예측화선(m)", "SOP레벨"]], use_container_width=True, hide_index=True)
 
+st.markdown("<br>", unsafe_allow_html=True)
+st.subheader("📅 🛰️ 령이 2주간의 전 권역 실시간 기상/예측 누적 저장소 (`ryong_i_sensor_logs.json`)")
 if os.path.exists(SENSOR_LOG_FILE):
     try:
         with open(SENSOR_LOG_FILE, "r", encoding="utf-8") as f: loaded_sensor_logs = json.load(f)
-        
         flattened_logs = []
-        # 표 형식으로 이쁘게 변환하기 위해 차원 평탄화 작업 수행
-        for log in reversed(loaded_sensor_logs[-15:]):  # 최근 15개 시점 우선 가시화
-            time_stamp = log["감지 시각"]
+        for log in reversed(loaded_sensor_logs[-15:]):  
+            time_stamp = log["감지 스캔 시각"] if "감지 스캔 시각" in log else log["감지 시각"]
             for r in log["전국 권역 환경 스냅샷"]:
                 flattened_logs.append({
                     "감지 스캔 시각": time_stamp, "대상 권역": r["지역"], "STN 코드": r["관측소_STN"],
@@ -358,13 +334,26 @@ if os.path.exists(SENSOR_LOG_FILE):
                     "예측 면적(평)": f"{r['AI_예측_피해규모_평']:,.1f} 평", "예측 화선": f"{r['예상_화선_m']} m"
                 })
         st.dataframe(pd.DataFrame(flattened_logs), use_container_width=True, hide_index=True)
-    except: st.info("데이터 파일 롤링 인덱싱 대기 중...")
-else:
-    st.info("🌱 전국 상시 자율 감지망의 환경 로그 파일 생성 중입니다. 다음 데이터 업데이트 주기 때 표가 자동 연동됩니다.")
+    except: pass
 
-# --- 📋 기존 소방 교차 검증 로그 아카이브 뷰어 ---
-st.subheader("🎯 실시간 산불 인지 속도 검증 및 소방신고 기록 교차 대조 상황판 (`ryong_i_annual_db.json`)")
+st.markdown("<br>", unsafe_allow_html=True)
+st.subheader("🎯 령이 자율 포착 시스템 성능 검증 (실시간 119 API 동기화 레이어)")
+v1, v2 = st.columns(2)
+v1.metric("🛰️ 령이 통합 관제 서버 현재시각", now_kst.strftime("%Y-%m-%d %H:%M:%S"))
+
+real_119_time_raw = get_realtime_119_dispatch_data()
+real_119_show, diff_show = "출동망 동기화 완료 (대기 중)", "전국망 상시 교차 매칭 엔진 가동 중"
+if real_119_time_raw:
+    try:
+        dt_report = datetime.strptime(real_119_time_raw, "%Y%m%d%H%M%S").replace(tzinfo=tz_kst)
+        real_119_show = dt_report.strftime("%Y-%m-%d %H:%M:%S")
+        time_diff = dt_report - now_kst
+        diff_seconds = int(time_diff.total_seconds())
+        diff_min, diff_sec = abs(diff_seconds) // 60, abs(diff_seconds) % 60
+        diff_show = f"위성 조기 경보가 소방청 신고 접수보다 {diff_min}분 {diff_sec}초 신속함" if diff_seconds > 0 else f"소방청 신고 접수가 {diff_min}분 {diff_sec}초 먼저 수신됨"
+    except: pass
+v2.metric("🚒 소방청 실시간 119 출동 접수 시각", real_119_show)
+st.info(f"⚡ **전국망 교차 검증 리포트**\n\n{diff_show}")
+
 if st.session_state['fire_blackbox']:
     st.table([{"령이 감지 시각": r["령이 감지 시각"], "소방신고 접수 시각": r["소방신고 접수 시각"], "실측 시차 분석": r["실측 시차 분석"], "발화 대상 주소": r["발화 대상 주소"], "AI 예측 피해규모": r["AI 예측 피해규모"], "예상 화선 및 풍향": r["예상 화선 및 풍향"]} for r in st.session_state['fire_blackbox'][:7]])
-else:
-    st.info("🚨 현재 교차 동기화된 실시간 화재 열점이 없습니다. 전국망 상시 전수 스캔 중...")
