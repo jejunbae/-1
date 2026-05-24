@@ -24,7 +24,7 @@ current_hour = now_kst.hour
 is_night = (current_hour >= 19 or current_hour < 6)
 
 st.title("🚨 실시간 화재 조기경보 및 통합 관제 플랫폼 '령이'")
-st.markdown(f"**현재 관제 상태:** {'🌙 야간 전술 모드' if is_night else '☀️ 주간 관제 모드'} | **Core Engine:** 🧠 전국 실시간 자율 랭킹 및 통제 슬라이더 가동 엔진 v15.0")
+st.markdown(f"**현재 관제 상태:** {'🌙 야간 전술 모드' if is_night else '☀️ 주간 관제 모드'} | **Core Engine:** 🧠 가상 로그 필터링 및 화이트 폰트 가독성 보정 엔진 v16.0")
 st.divider()
 
 DB_FILE = "ryong_i_annual_db.json"
@@ -65,7 +65,6 @@ def load_ryong_i_ai():
 
 ai_brain, ai_status_message = load_ryong_i_ai()
 
-# 문법 오류 교정 완료 파트
 if 'fire_blackbox' not in st.session_state:
     if os.path.exists(DB_FILE):
         try: 
@@ -112,7 +111,7 @@ def get_dynamic_sop_manual(area_ha, danger_zone):
     else:
         return "🟡 [SOP 1단계] 초동 진압 관할 출동", f"🚒 **[10분]** 관할 안전센터 진화 펌프차 현장 급파.", f"⚠️ **[30분]** 고압 방수포 전개, 건조 수목 낙엽층 집중 살수.", f"🧑‍🚒 **[60분]** 기계화 등짐펌프 조 투입 잔불 정리 및 예찰."
 
-# --- 🎮 사이드바 시뮬레이터 통제 장치 (부활 완료) ---
+# --- 🎮 사이드바 시뮬레이터 통제 장치 ---
 st.sidebar.header("🎛️ 전국 단위 관제 테스트")
 sim_mode = st.sidebar.checkbox("🚨 가상 산불 상황 강제 조작 활성화", value=False)
 
@@ -138,7 +137,6 @@ for city, info in ALL_NATION_STN_MAP.items():
     t, h, w, wd = fetch_kma_live_weather(info["stn"])
     slope = info["slope"]
     
-    # 사이드바 슬라이더 값이 실시간으로 주입되는 핵심 로직
     if sim_mode and city == sim_city:
         t, h, w, wd, slope = sim_t, sim_h, sim_w, sim_wd, sim_slope
 
@@ -206,33 +204,37 @@ if is_fire_detected:
     
     sop_title, m10, m30, m60 = get_dynamic_sop_manual(top_1_target["score"], danger_zone)
     
-    # 문법 오류 완전 수정 완료 파트 (줄바꿈 정렬)
-    sat_time_str = now_kst.strftime("%Y-%m-%d %H:%M:%S")
-    new_log = {
-        "령이 감지 시각": sat_time_str, "소방신고 접수 시각": "실시간 동기화 중", "실측 시차 분석": "위성 자율 검출 완료",
-        "발화 대상 주소": top_1_target["addr"], "AI 예측 피해규모 (평)": f"{pyeong:,.0f} 평", "예상 화선 및 풍향": f"{fire_line:,.0f}m ({wd_text.split(' ')[0]})"
-    }
-    if not st.session_state['fire_blackbox'] or st.session_state['fire_blackbox'][0]["발화 대상 주소"] != top_1_target["addr"]:
-        st.session_state['fire_blackbox'].insert(0, new_log)
-        try:
-            with open(DB_FILE, "w", encoding="utf-8") as f: 
-                json.dump(st.session_state['fire_blackbox'], f, ensure_ascii=False, indent=4)
-        except: 
-            pass
+    # 🔒 [핵심 고도화] 시뮬레이션(강제 조작) 모드가 아닐 때만 찐 관측 로그 적재 수행
+    if not sim_mode:
+        sat_time_str = now_kst.strftime("%Y-%m-%d %H:%M:%S")
+        new_log = {
+            "령이 감지 시각": sat_time_str, "소방신고 접수 시각": "실시간 동기화 중", "실측 시차 분석": "위성 자율 검출 완료",
+            "발화 대상 주소": top_1_target["addr"], "AI 예측 피해규모 (평)": f"{pyeong:,.0f} 평", "예상 화선 및 풍향": f"{fire_line:,.0f}m ({wd_text.split(' ')[0]})"
+        }
+        if not st.session_state['fire_blackbox'] or st.session_state['fire_blackbox'][0]["발화 대상 주소"] != top_1_target["addr"]:
+            st.session_state['fire_blackbox'].insert(0, new_log)
+            try: 
+                with open(DB_FILE, "w", encoding="utf-8") as f: 
+                    json.dump(st.session_state['fire_blackbox'], f, ensure_ascii=False, indent=4)
+            except: 
+                pass
 
-    st.header(f"📍 [2단계] AI 선별 최우선 추적 관제 구역 ➔ [{top_1_target['city']}시·군]")
+    st.header(f"📍 [2단계] AI 선별 최우선 추적 관제 구역 ➔ [{top_1_target['city']}시·군] {'🧪 (가상 가동 중)' if sim_mode else ''}")
     col_t1, col_t2 = st.columns([1, 2])
+    
     with col_t1:
+        # ⚪ [핵심 고도화] 다크 모드 배경에서 시인성을 확보하기 위해 <p> 태그 내부 글씨체를 선명한 화이트(#ffffff)로 전면 마크업 교정
         st.markdown(f"""
         <div style="background-color: #262730; padding: 20px; border-radius: 8px; border-left: 5px solid #ff4b4b;">
-            <h4 style="margin:0 0 8px 0; color:#ff4b4b;">🔍 최고 위험 지형/환경 리포트</h4>
-            <p style="margin:4px 0;"><b>지번 주소:</b> {top_1_target['addr']}</p>
-            <p style="margin:4px 0;"><b>실측 실시간 기온:</b> {top_1_target['t']} °C</p>
-            <p style="margin:4px 0;"><b>상대습도/풍속:</b> {top_1_target['h']}% / {top_1_target['w']}m/s</p>
-            <p style="margin:4px 0;"><b>지형 사면 경사도:</b> {top_1_target['slope']} °</p>
-            <p style="margin:4px 0;"><b>분당 확산 속도:</b> {spread_rate_min * 3025.0:.1f} 평/min</p>
+            <h4 style="margin:0 0 10px 0; color:#ff4b4b; font-weight: bold;">🔍 최고 위험 지형/환경 리포트</h4>
+            <p style="margin:6px 0; color: #ffffff; font-size:15px;"><b>지번 주소:</b> {top_1_target['addr']}</p>
+            <p style="margin:6px 0; color: #ffffff; font-size:15px;"><b>실측 실시간 기온:</b> {top_1_target['t']} °C</p>
+            <p style="margin:6px 0; color: #ffffff; font-size:15px;"><b>상대습도/풍속:</b> {top_1_target['h']}% / {top_1_target['w']}m/s</p>
+            <p style="margin:6px 0; color: #ffffff; font-size:15px;"><b>지형 사면 경사도:</b> {top_1_target['slope']} °</p>
+            <p style="margin:6px 0; color: #ffffff; font-size:15px;"><b>분당 확산 속도:</b> <span style="color:#ffaa00; font-weight:bold;">{spread_rate_min * 3025.0:.1f} 평/min</span></p>
         </div>
         """, unsafe_allow_html=True)
+        
     with col_t2:
         st.markdown(f"""
         <div style="background-color: #ff4b4b; padding: 30px; border-radius: 8px; text-align: center;">
