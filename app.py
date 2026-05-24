@@ -72,9 +72,13 @@ ai_brain, ai_status_message = load_ryong_i_ai()
 
 if 'fire_blackbox' not in st.session_state:
     if os.path.exists(DB_FILE):
-        try: with open(DB_FILE, "r", encoding="utf-8") as f: st.session_state['fire_blackbox'] = json.load(f)
-        except: st.session_state['fire_blackbox'] = []
-    else: st.session_state['fire_blackbox'] = []
+        try: 
+            with open(DB_FILE, "r", encoding="utf-8") as f: 
+                st.session_state['fire_blackbox'] = json.load(f)
+        except: 
+            st.session_state['fire_blackbox'] = []
+    else:
+        st.session_state['fire_blackbox'] = []
 
 def fetch_kma_live_weather(stn_id):
     # 전국 상시 안전 모드 디폴트값 설정 (습도 높음)
