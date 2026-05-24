@@ -1,4 +1,5 @@
 streamlit
-requests
+pandas
 scikit-learn
 joblib
+requests
