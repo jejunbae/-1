@@ -24,7 +24,7 @@ tz_kst = timezone(timedelta(hours=9))
 now_kst = datetime.now(tz_kst)
 
 st.title("🚨 대한민국 전역 실시간 산불 관제 플랫폼 '령이'")
-st.markdown(f"**Core Engine:** 🧠 270만 건 전국구 빅데이터 기반 자율 랭킹 대시보드 v38.0")
+st.markdown(f"**Core Engine:** 🧠 270만 건 전국구 빅데이터 기반 자율 랭킹 대시보드 v39.0")
 st.divider()
 
 MODEL_FILE = "ryong_i_ai_brain.pkl"
@@ -110,14 +110,8 @@ def get_dynamic_sop_manual(prob, score, city, danger_zone):
     m60 = f"**[60분내 예보 방송]** 재난 방송 자율 송출: 'AI 분석 확산 위험도 {score:.2f}점 돌파. 입산 전면 통제 및 인근 주민 대피 준비 요망.'"
     return m10, m30, m60
 
-# --- 🎮 사이드바 시뮬레이터 통제 장치 (고정 버그 완벽 해결 패치) ---
+# --- 🎮 사이드바 시뮬레이터 통제 장치 ---
 st.sidebar.header("🎛️ 전국 단위 확률 예측 제어판")
-
-# 💡 [긴급 소방 패치] 시뮬레이션 체크박스가 꺼지는 순간, 기존에 선택했던 도시 고정 잔상을 강제로 삭제합니다.
-if "sim_mode_check" in st.session_state and not st.session_state["sim_mode_check"]:
-    if "selected_city" in st.session_state:
-        del st.session_state["selected_city"]
-
 sim_mode = st.sidebar.checkbox("🚨 특정 도시 기상 악화 시뮬레이션", value=False, key="sim_mode_check")
 
 sim_city = "안동"
@@ -131,8 +125,11 @@ if sim_mode:
     sim_w = st.sidebar.slider("가상 풍속 (m/s)", 0.0, 25.0, value=6.5)
 
 # =========================================================================================
-# 🔄 전국 26개 구역 황금 밸런싱 연산 엔진 가동
+# 🔄 [안정성 고도화 버전] 전국 26개 구역 황금 밸런싱 및 가중치 평활화(Smoothing) 엔진
 # =========================================================================================
+if "history_probs" not in st.session_state:
+    st.session_state["history_probs"] = {}
+
 all_scanned_list = []
 
 for city, info in ALL_NATION_STN_MAP.items():
@@ -154,9 +151,19 @@ for city, info in ALL_NATION_STN_MAP.items():
     weather_factor = (local_t * 0.35) + (local_w * 1.3)
     base_prob = weather_factor * humidity_dryness * 3.2
     
-    final_prob = min(97.8, base_prob * (1.0 + (slope / 90.0)))
-    final_prob = max(18.5, final_prob)
-    if local_h > 70: final_prob = max(5.0, final_prob * 0.15)
+    raw_prob = min(97.8, base_prob * (1.0 + (slope / 90.0)))
+    raw_prob = max(18.5, raw_prob)
+    if local_h > 70: raw_prob = max(5.0, raw_prob * 0.15)
+
+    # 📡 [이동평균 필터 레이어] 1분당 대지진 순위 롤백 현상 해결
+    if city in st.session_state["history_probs"]:
+        prev_prob = st.session_state["history_probs"][city]
+        weight = 0.0 if sim_mode else 0.85 
+        final_prob = (prev_prob * weight) + (raw_prob * (1.0 - weight))
+    else:
+        final_prob = raw_prob
+
+    st.session_state["history_probs"][city] = final_prob
 
     spread_factor = 0.001 + (local_w * 0.003) + (slope * 0.001)
     if local_h < 45: spread_factor *= 1.8
@@ -173,14 +180,20 @@ top_1_target = df_nation.iloc[0]
 PROB_THRESHOLD = 75.0
 is_alert_triggered = (top_1_target["prob"] >= PROB_THRESHOLD)
 
+# 💡 [버그 소방 패치 완료] 시뮬레이션 해제 및 다이렉트 정밀 관측 선택 락 동기화
+if "selected_city" not in st.session_state:
+    st.session_state["selected_city"] = df_nation.iloc[0]["city"]
+
+if not sim_mode and "last_sim_state" in st.session_state and st.session_state["last_sim_state"]:
+    st.session_state["selected_city"] = df_nation.iloc[0]["city"]
+
+st.session_state["last_sim_state"] = sim_mode
+
 # =========================================================================================
 # 🛰️ 1단계: 대형 산불로 발전 확률 최상위 랭킹 TOP 5 카드 표출
 # =========================================================================================
 st.header("🛰️ [1단계] 실시간 대한민국 대형 산불로 발전 확률 랭킹 TOP 5")
 st.caption("※ 270만 건의 전국 기후 빅데이터를 기반으로 현재 기상 실황과 산불 기후 임계점 패턴과의 싱크로율을 정밀 계산한 결과입니다.")
-
-if "selected_city" not in st.session_state:
-    st.session_state["selected_city"] = df_nation.iloc[0]["city"]
 
 cols = st.columns(5)
 for idx, row in df_nation.iterrows():
@@ -212,10 +225,16 @@ for idx, row in df_nation.iterrows():
 # =========================================================================================
 st.divider()
 target_city = st.session_state["selected_city"]
-city_data = df_nation[df_nation["city"] == target_city].iloc[0]
 
-st.header(f"📍 [2단계] AI 초국지성 관제탑 ➔ [{target_city}] 구역 정밀 분석")
-st.caption(f"선택하신 [{target_city}] 구역의 실시간 기상 센서값과 령이 AI 예측 스펙트럼 결과입니다.")
+# 선택한 도시가 현재 스캔본에 없을 경우를 대비한 안전 가드
+if target_city in df_nation["city"].values:
+    city_data = df_nation[df_nation["city"] == target_city].iloc[0]
+else:
+    city_data = df_nation.iloc[0]
+    st.session_state["selected_city"] = city_data["city"]
+
+st.header(f"📍 [2단계] AI 초국지성 관제탑 ➔ [{city_data['city']}] 구역 정밀 분석")
+st.caption(f"선택하신 [{city_data['city']}] 구역의 실시간 기상 센서값과 령이 AI 예측 스펙트럼 결과입니다.")
 
 c1, c2, c3 = st.columns([1, 1.1, 1.3])
 
@@ -236,17 +255,14 @@ with c2:
     elif city_data['prob'] >= 50.0: status_color = "#ffaa00"
     else: status_color = "#1a73e8"
 
-    # 💡 [시간별 피해 면적 & 화선 길이 비선형 물리 시뮬레이션 알고리즘]
-    # 기저 확산 속도 상수에 풍속 복리와 경사 가중치 반영
+    # 물리 확산 추정 알고리즘
     base_spread_rate = (city_data['w'] * 1.5) * (1.0 + (city_data['slope'] / 35.0))
     if city_data['h'] < 30: base_spread_rate *= 1.5
 
-    # 시간대별 예측 메트릭 데이터 연산
     p_10 = int(city_data['score'] * base_spread_rate * 15)
     p_30 = int(p_10 * 3.8)
     p_60 = int(p_30 * 4.2)
 
-    # 화선 길이는 바람세기 방향에 비례해 직선 연장
     l_10 = int(base_spread_rate * 25)
     l_30 = int(l_10 * 2.8)
     l_60 = int(l_30 * 2.5)
@@ -283,12 +299,12 @@ with c2:
 with c3:
     m10, m30, m60 = get_dynamic_sop_manual(city_data["prob"], city_data["score"], city_data["city"], "지정 산림 관제 사면")
     
-    st.markdown(f"<h4 style='margin:0 0 10px 0; color:#ff4b4b; font-size:15px; font-weight:bold;'>🚒 {target_city} 구역 소방 선제 대응 매뉴얼(SOP)</h4>", unsafe_allow_html=True)
+    st.markdown(f"<h4 style='margin:0 0 10px 0; color:#ff4b4b; font-size:15px; font-weight:bold;'>🚒 {city_data['city']} 구역 소방 선제 대응 매뉴얼(SOP)</h4>", unsafe_allow_html=True)
     st.info(m10)
     st.warning(m30)
     st.error(m60)
 
-# 🔒 [자동 구글 시트 백업 로그 체계] 
+# 🔒 [구글 시트 클라우드 원격 로깅]
 if is_alert_triggered and not sim_mode and 'conn' in locals():
     sat_time_str = now_kst.strftime("%Y-%m-%d %H:%M:%S")
     should_write = True
@@ -297,7 +313,6 @@ if is_alert_triggered and not sim_mode and 'conn' in locals():
             should_write = False
             
     if should_write:
-        # 가상 확산 가중치를 포함한 60분 최종 평수 로그 기록
         final_p_60 = int(top_1_target['score'] * ((top_1_target['w'] * 1.5) * (1.0 + (top_1_target['slope'] / 35.0))) * 15 * 3.8 * 4.2)
         new_row = pd.DataFrame([{
             "령이 감지 시각": sat_time_str,
