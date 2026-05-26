@@ -1,4 +1,8 @@
+streamlit
 pandas
+pydeck
+geopandas
+shapely
+pyproj
 scikit-learn
 joblib
-st-gsheets-connection
