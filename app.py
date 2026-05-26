@@ -110,9 +110,15 @@ def get_dynamic_sop_manual(prob, score, city, danger_zone):
     m60 = f"**[60분내 예보 방송]** 재난 방송 자율 송출: 'AI 분석 확산 위험도 {score:.2f}점 돌파. 입산 전면 통제 및 인근 주민 대피 준비 요망.'"
     return m10, m30, m60
 
-# --- 🎮 사이드바 시뮬레이터 통제 장치 ---
+# --- 🎮 사이드바 시뮬레이터 통제 장치 (고정 버그 완벽 해결 패치) ---
 st.sidebar.header("🎛️ 전국 단위 확률 예측 제어판")
-sim_mode = st.sidebar.checkbox("🚨 특정 도시 기상 악화 시뮬레이션", value=False)
+
+# 💡 [긴급 소방 패치] 시뮬레이션 체크박스가 꺼지는 순간, 기존에 선택했던 도시 고정 잔상을 강제로 삭제합니다.
+if "sim_mode_check" in st.session_state and not st.session_state["sim_mode_check"]:
+    if "selected_city" in st.session_state:
+        del st.session_state["selected_city"]
+
+sim_mode = st.sidebar.checkbox("🚨 특정 도시 기상 악화 시뮬레이션", value=False, key="sim_mode_check")
 
 sim_city = "안동"
 sim_t, sim_h, sim_w = 32.5, 14.0, 6.5
