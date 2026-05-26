@@ -25,7 +25,7 @@ tz_kst = timezone(timedelta(hours=9))
 now_kst = datetime.now(tz_kst)
 
 st.title("🚨 경상북도 실시간 산불 소방 작전 지휘 플랫폼 '령이'")
-st.markdown(f"**Core Engine v48.0:** 🏹 화살표 전술선 벡터 전개 & 🔒 평시/시뮬레이션 UI 격리 (KeyError 완전 박멸본)")
+st.markdown(f"**Core Engine v48.1:** 🏹 화살표 전술선 벡터 전개 & 🔒 평시/시뮬레이션 UI 격리 (KeyError 완전 박멸 최적화본)")
 st.divider()
 
 # --- 📁 [데이터 백엔드] 1. 경북 47번 등산로 GIS 파일 로드 ---
@@ -47,6 +47,7 @@ gdf_gb_trails = load_gyeongbuk_gis_lines()
 
 # --- 🛰️ [KeyError 완전 박멸] 경상북도 22개 시·군 산림 인프라 제원 마스터 풀 ---
 # 모든 도내 행정구역에 10대 마스터 제원 유전자를 100% 완전 동기화 주입 완료했습니다.
+# (경주시 데이터에 누락되었던 pine_ratio 데이터 보완 완료)
 GB_NATION_STN_MAP = {
     "안동시": {"stn": 272, "lat": 36.6345, "lon": 128.7834, "slope": 25.0, "addr": "경북 안동시 와룡면 주진리 야산 지대", "water_dist": 2.5, "road_density": 35, "pine_ratio": 65, "prefix": "andong", "search_kw": "안동"},
     "울진군": {"stn": 130, "lat": 36.9542, "lon": 129.2845, "slope": 28.0, "addr": "경북 울진군 금강송면 하원리 산림 격자", "water_dist": 7.2, "road_density": 10, "pine_ratio": 88, "prefix": "uljin", "search_kw": "울진"},
@@ -56,7 +57,7 @@ GB_NATION_STN_MAP = {
     "포항시": {"stn": 138, "lat": 36.2314, "lon": 129.2845, "slope": 15.0, "addr": "경북 포항시 북구 내연산 군립공원 구역", "water_dist": 1.2, "road_density": 50, "pine_ratio": 40, "prefix": "pohang", "search_kw": "포항"},
     "경산시": {"stn": 281, "lat": 35.8845, "lon": 128.7412, "slope": 14.0, "addr": "경북 경산시 팔공산 남측 갓바위 사면", "water_dist": 2.0, "road_density": 58, "pine_ratio": 35, "prefix": "gyeongsan", "search_kw": "경산"},
     "영천시": {"stn": 281, "lat": 36.1421, "lon": 128.9845, "slope": 22.0, "addr": "경북 영천시 화북면 보현산 천문대 구역", "water_dist": 4.0, "road_density": 28, "pine_ratio": 60, "prefix": "yeongcheon", "search_kw": "영천"},
-    "경주시": {"stn": 138, "lat": 35.8124, "lon": 129.3412, "slope": 19.0, "addr": "경북 경주시 양북면 토함산 국립공원 지대", "water_dist": 2.7, "road_density": 38, "prefix": "gyeongju", "search_kw": "경주"},
+    "경주시": {"stn": 138, "lat": 35.8124, "lon": 129.3412, "slope": 19.0, "addr": "경북 경주시 양북면 토함산 국립공원 지대", "water_dist": 2.7, "road_density": 38, "pine_ratio": 55, "prefix": "gyeongju", "search_kw": "경주"},
     "김천시": {"stn": 279, "lat": 36.1124, "lon": 128.0124, "slope": 24.0, "addr": "경북 김천시 대항면 황악산 직지사 배후령", "water_dist": 3.5, "road_density": 30, "pine_ratio": 58, "prefix": "gimcheon", "search_kw": "김천"},
     "상주시": {"stn": 273, "lat": 36.5412, "lon": 127.9845, "slope": 23.0, "addr": "경북 상주시 화북면 속리산 문장대 사면", "water_dist": 4.2, "road_density": 26, "pine_ratio": 64, "prefix": "sangju", "search_kw": "상주"},
     "영주시": {"stn": 272, "lat": 36.9412, "lon": 128.5214, "slope": 27.0, "addr": "경북 영주시 풍기읍 소백산 희방사 계곡지대", "water_dist": 5.0, "road_density": 20, "pine_ratio": 72, "prefix": "yeongju", "search_kw": "영주"},
@@ -112,12 +113,12 @@ sim_h = st.sidebar.slider("가상 상대습도 (%)", 0.0, 100.0, value=9.0)
 sim_w = st.sidebar.slider("가상 풍속 (m/s)", 0.0, 25.0, value=8.5)
 
 # =========================================================================================
-# 🔄 경북 22개 시·군 실시간 기상 및 위험 점수 연산 루프
+# 🔄 경북 22개 시·군 실시간 기상 및 위험 점수 연산 루프 (안전망 강화 완료)
 # =========================================================================================
 all_scanned_list = []
 for city, info in GB_NATION_STN_MAP.items():
     t, h, w, wd = fetch_kma_live_weather(info["stn"])
-    slope = info["slope"]
+    slope = info.get("slope", 20.0)
     if city == sim_city: t, h, w = sim_t, sim_h, sim_w
 
     humidity_dryness = (100 - h) / 100.0
@@ -125,14 +126,19 @@ for city, info in GB_NATION_STN_MAP.items():
     weather_factor = (t * 0.35) + (w * 1.4)
     raw_prob = max(18.5, min(99.4, weather_factor * humidity_dryness * 3.5 * (1.0 + (slope / 90.0))))
 
-    difficulty_penalty = (info["water_dist"] * 0.15) + ((100 - info["road_density"]) * 0.01) + (info["pine_ratio"] * 0.006)
+    # 🛡️ 딕셔너리에 데이터가 혹시라도 누락되었을 경우를 대비한 완전 방어선 (.get 메서드 사용)
+    water_dist = info.get("water_dist", 3.0)
+    road_density = info.get("road_density", 30)
+    pine_ratio = info.get("pine_ratio", 50) 
+
+    difficulty_penalty = (water_dist * 0.15) + ((100 - road_density) * 0.01) + (pine_ratio * 0.006)
     spread_factor = 0.001 + (w * 0.004) + (slope * 0.002)
     danger_score = ((raw_prob * 0.001) + (spread_factor * 12.0)) * (1.0 + difficulty_penalty)
 
     all_scanned_list.append({
         "city": city, "lat": info["lat"], "lon": info["lon"], "addr": info["addr"], "t": t, "h": h, "w": w, "wd": wd, "slope": slope, 
         "prob": raw_prob, "score": danger_score, "prefix": info["prefix"], "search_kw": info["search_kw"],
-        "water_dist": info["water_dist"], "road_density": info["road_density"], "pine_ratio": info["pine_ratio"], "penalty": difficulty_penalty
+        "water_dist": water_dist, "road_density": road_density, "pine_ratio": pine_ratio, "penalty": difficulty_penalty
     })
 
 df_nation = pd.DataFrame(all_scanned_list).sort_values(by="prob", ascending=False).reset_index(drop=True)
@@ -258,7 +264,6 @@ if emergency_mode:
     pydeck_layers.append(pdk.Layer("PolygonLayer", pd.DataFrame([{"poly": poly_60}]), get_polygon="poly", get_fill_color="[200, 0, 0, 25]", get_line_color="[220, 0, 0, 255]", line_width_min_pixels=3))
 
     # 3. 🏹 [대표님 핵심 역점 오더] 화살표 전술선 (Line Vector) 레이어 전개!
-    # 발화 원점(Center)에서 화두 최전방(Front Point)까지 어디로 뿜어져 나가는지 굵은 지휘 화살표선을 쫙 그어버립니다.
     front_10, front_30, front_60 = poly_10[0], poly_30[0], poly_60[0]
     
     arrow_lines_data = [
@@ -304,7 +309,6 @@ else:
 # =========================================================================================
 # 📡 [순위별 정밀관측 연동 메인 UI] 정밀관측 기상상황 및 예상 피해 스크리닝 패널
 # =========================================================================================
-# 평상시와 시뮬레이션 공통으로 사용되는 AI 피드백 3열 보드입니다.
 st.markdown("---")
 st.subheader(f"📡 [종합 AI 피드백 제원] {city_data['city']} 관내 정밀 예찰 기상 및 확산 예측 분석")
 
@@ -370,7 +374,6 @@ with c3:
 # =========================================================================================
 # 📋 [대표님 오더 반영 3] 기존 예측 대장 테이블 영구 삭제 처리 완료
 # =========================================================================================
-# 하단에는 무결성 로그 아카이브만 깔끔하게 남아 신뢰도를 높여줍니다.
 st.divider()
 st.subheader("📋 령이 자율 포착 로그 대장 (경상북도 소방 재난 방재 시스템 아카이브)")
 
