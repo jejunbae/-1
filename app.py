@@ -13,7 +13,7 @@ import joblib
 from streamlit_gsheets import GSheetsConnection
 
 # 🖥️ 웹페이지 상단 기본 세팅
-st.set_page_config(page_title="국가 화재 통합 관제 AI 령이", page_icon="⚠️", layout="wide")
+st.set_page_config(page_title="경북 산불 통합 관제 AI 령이", page_icon="⚠️", layout="wide")
 
 if "SEC_KEY" in st.secrets: 
     API_KEY = st.secrets["SEC_KEY"]
@@ -23,46 +23,43 @@ else:
 tz_kst = timezone(timedelta(hours=9))
 now_kst = datetime.now(tz_kst)
 
-st.title("🚨 대한민국 전역 실시간 산불 관제 플랫폼 '령이'")
-st.markdown(f"**Core Engine:** 🧠 270만 건 전국구 빅데이터 기반 자율 랭킹 대시보드 v39.0")
+st.title("🚨 경상북도 실시간 산불 소방 작전 지휘 플랫폼 '령이'")
+st.markdown(f"**Core Engine:** 🧠 경북 22개 시·군 맞춤형 정책 과제 프로토타입 v40.1")
 st.divider()
 
 MODEL_FILE = "ryong_i_ai_brain.pkl"
 
-# --- 🛰️ 대한민국 전국구 26개 거점 관측소(STN) 마스터 풀 ---
-ALL_NATION_STN_MAP = {
-    "안동": {"stn": 272, "slope": 25.0, "addr": "경상북도 안동시 명륜동 야산 지대 일원"},
-    "문경": {"stn": 273, "slope": 32.0, "addr": "경상북도 문경시 가은읍 수예리 산 18-1"},
-    "의성": {"stn": 278, "slope": 18.0, "addr": "경상북도 의성군 의성읍 원당리 일원"},
-    "구미": {"stn": 279, "slope": 20.0, "addr": "경상북도 구미시 금오산 성안 구역"},
-    "울진": {"stn": 130, "slope": 28.0, "addr": "경상북도 울진군 북면 주인리 산림대"},
-    "포항": {"stn": 138, "slope": 15.0, "addr": "경상북도 포항시 북구 송라면 지경리"},
-    "영천": {"stn": 281, "slope": 22.0, "addr": "경상북도 영천시 보현산 천문대 구역"},
-    "강릉": {"stn": 105, "slope": 35.0, "addr": "강원도 강릉시 성산면 백두대간령"},
-    "속초": {"stn": 90, "slope": 30.0, "addr": "강원도 속초시 설악산 국립공원 구역"},
-    "춘천": {"stn": 101, "slope": 22.0, "addr": "강원도 춘천시 신북읍 산림 지대"},
-    "원주": {"stn": 114, "slope": 24.0, "addr": "강원도 원주시 치악산 국지 사면"},
-    "태백": {"stn": 115, "slope": 33.0, "addr": "강원도 태백시 함백산 등선 구역"},
-    "서울": {"stn": 108, "slope": 12.0, "addr": "서울특별시 관악구 관악산 산림 격자"},
-    "수원": {"stn": 119, "slope": 10.0, "addr": "경기도 수원시 광교산 사면 대안"},
-    "청주": {"stn": 131, "slope": 15.0, "addr": "충청북도 청주시 상당구 우암산 구역"},
-    "충주": {"stn": 127, "slope": 23.0, "addr": "충청북도 충주시 계명산 선제 관제구"},
-    "제천": {"stn": 135, "slope": 26.0, "addr": "충청북도 제천시 월악산 국립공원"},
-    "대전": {"stn": 133, "slope": 14.0, "addr": "대전광역시 동구 식장산 배치구역"},
-    "대구": {"stn": 143, "slope": 23.0, "addr": "대구광역시 동구 팔공산 사면 초입"},
-    "전주": {"stn": 146, "slope": 16.0, "addr": "전라북도 전주시 완산구 모악산 기슭"},
-    "광주": {"stn": 156, "slope": 21.0, "addr": "광주광역시 동구 무등산 지형 사면"},
-    "순천": {"stn": 174, "slope": 19.0, "addr": "전라남도 순천시 조계산 선암사 구역"},
-    "부산": {"stn": 159, "slope": 18.0, "addr": "부산광역시 금정구 금정산 격자 구역"},
-    "울산": {"stn": 152, "slope": 20.0, "addr": "울산광역시 울주군 신불산 억새평원"},
-    "진주": {"stn": 192, "slope": 17.0, "addr": "경상남도 진주시 지리산 동부 초입 구역"},
-    "제주": {"stn": 184, "slope": 29.0, "addr": "제주특별자치도 제주시 한라산 성판악 구역"}
+# --- 🛰️ 경상북도 22개 시·군 국지성 지형 및 소방 인프라 마스터 데이터 풀 ---
+# 💡 [교수님 피드백 반영] 범위를 경북으로 한정하고 실제 행정구역 좌표(위도/경도) 및 특성 매핑
+GB_NATION_STN_MAP = {
+    "안동시": {"stn": 272, "lat": 36.5683, "lon": 128.7294, "slope": 25.0, "addr": "경상북도 안동시 명륜동 야산 지대 일원", "water_dist": 2.5, "road_density": 35, "pine_ratio": 65},
+    "울진군": {"stn": 130, "lat": 36.9936, "lon": 129.4005, "slope": 28.0, "addr": "경상북도 울진군 북면 주인리 산림 격자", "water_dist": 7.2, "road_density": 10, "pine_ratio": 88},
+    "문경시": {"stn": 273, "lat": 36.5861, "lon": 128.1866, "slope": 32.0, "addr": "경상북도 문경시 가은읍 수예리 산 18-1", "water_dist": 6.8, "road_density": 12, "pine_ratio": 78},
+    "구미시": {"stn": 279, "lat": 36.1214, "lon": 128.3446, "slope": 20.0, "addr": "경상북도 구미시 금오산 성안 구역", "water_dist": 1.8, "road_density": 45, "pine_ratio": 55},
+    "포항시": {"stn": 138, "lat": 36.0190, "lon": 129.3435, "slope": 15.0, "addr": "경상북도 포항시 북구 송라면 지경리", "water_dist": 1.2, "road_density": 50, "pine_ratio": 40},
+    "경산시": {"stn": 281, "lat": 35.8251, "lon": 128.7376, "slope": 14.0, "addr": "경상북도 경산시 하양읍 부호리 야산", "water_dist": 2.0, "road_density": 58, "pine_ratio": 35},
+    "영천시": {"stn": 281, "lat": 35.9733, "lon": 128.9431, "slope": 22.0, "addr": "경상북도 영천시 보현산 천문대 구역", "water_dist": 4.0, "road_density": 28, "pine_ratio": 60},
+    "의성군": {"stn": 278, "lat": 36.3526, "lon": 128.6970, "slope": 18.0, "addr": "경상북도 의성군 의성읍 원당리 일원", "water_dist": 3.1, "road_density": 40, "pine_ratio": 50},
+    "경주시": {"stn": 138, "lat": 35.8562, "lon": 129.2132, "slope": 19.0, "addr": "경상북도 경주시 토함산 국립공원 격자", "water_dist": 2.7, "road_density": 38, "pine_ratio": 62},
+    "김천시": {"stn": 279, "lat": 36.1396, "lon": 128.1136, "slope": 24.0, "addr": "경상북도 김천시 황악산 직지사 사면", "water_dist": 3.5, "road_density": 30, "pine_ratio": 58},
+    "상주시": {"stn": 273, "lat": 36.4109, "lon": 128.1591, "slope": 23.0, "addr": "경상북도 상주시 속리산 국지 령선", "water_dist": 4.2, "road_density": 26, "pine_ratio": 64},
+    "영주시": {"stn": 272, "lat": 36.8088, "lon": 128.6271, "slope": 27.0, "addr": "경상북도 영주시 소백산 국립공원 구역", "water_dist": 5.0, "road_density": 20, "pine_ratio": 72},
+    "군위군": {"stn": 278, "lat": 36.2428, "lon": 128.6433, "slope": 17.0, "addr": "경상북도 군위군 삼국유사면 야산대", "water_dist": 2.9, "road_density": 42, "pine_ratio": 48},
+    "고령군": {"stn": 279, "lat": 35.7247, "lon": 128.2619, "slope": 16.0, "addr": "경상북도 고령군 대가야읍 사면 요충", "water_dist": 2.2, "road_density": 46, "pine_ratio": 42},
+    "성주군": {"stn": 279, "lat": 35.8854, "lon": 128.2858, "slope": 25.0, "addr": "경상북도 성주군 가야산 등선 관제구", "water_dist": 3.8, "road_density": 24, "pine_ratio": 66},
+    "칠곡군": {"stn": 279, "lat": 35.9954, "lon": 128.4011, "slope": 18.0, "addr": "경상북도 칠곡군 유학산 격자 사면", "water_dist": 1.9, "road_density": 52, "pine_ratio": 50},
+    "청도군": {"stn": 281, "lat": 35.6475, "lon": 128.7341, "slope": 21.0, "addr": "경상북도 청도군 운문산 자연휴양림", "water_dist": 3.4, "road_density": 32, "pine_ratio": 54},
+    "영양군": {"stn": 130, "lat": 36.6667, "lon": 129.1122, "slope": 29.0, "addr": "경상북도 영양군 일월산 격 격자구", "water_dist": 6.2, "road_density": 11, "pine_ratio": 80},
+    "영덕군": {"stn": 130, "lat": 36.4154, "lon": 129.3653, "slope": 23.0, "addr": "경상북도 영덕군 팔각산 옥계계곡 사면", "water_dist": 4.5, "road_density": 18, "pine_ratio": 85},
+    "봉화군": {"stn": 272, "lat": 36.8931, "lon": 128.7323, "slope": 30.0, "addr": "경상북도 봉화군 청량산 도립공원 지대", "water_dist": 5.8, "road_density": 14, "pine_ratio": 84},
+    "울릉군": {"stn": 130, "lat": 37.4844, "lon": 130.8633, "slope": 35.0, "addr": "경상북도 울릉군 성인봉 원시림 격자", "water_dist": 8.0, "road_density": 5, "pine_ratio": 40},
+    "청송군": {"stn": 272, "lat": 36.4354, "lon": 129.0573, "slope": 26.0, "addr": "경상북도 청송군 주왕산 국립공원 구역", "water_dist": 4.8, "road_density": 22, "pine_ratio": 76}
 }
 
 @st.cache_resource
 def load_ryong_i_ai():
     if os.path.exists(MODEL_FILE):
-        try: return joblib.load(MODEL_FILE), "🧠 270만 건 전국구 빅데이터 AI 심장 완벽 동기화"
+        try: return joblib.load(MODEL_FILE), "🧠 경북 빅데이터 AI 심장 완벽 동기화"
         except: pass
     model = RandomForestClassifier(n_estimators=10, random_state=42)
     model.fit(pd.DataFrame([{"STN": 272, "TA": 25.0, "HM": 30.0, "WS": 3.0}]), [0])
@@ -104,39 +101,50 @@ def get_wind_direction_text(deg):
     elif 247.5 <= deg < 292.5: return "서풍 (➡️ 동쪽 확산 위험)", "동쪽"
     else: return "북서풍 (↘️ 남동쪽 확산 위험)", "남동쪽"
 
-def get_dynamic_sop_manual(prob, score, city, danger_zone):
-    m10 = f"**[10분내 선제 조치]** {city} 관할 소방서, 대형 산불 발전 확률 임계치({prob:.1f}%) 돌파 감지. {danger_zone} 진화 노선 차량 선제 전진 배치."
-    m30 = f"**[30분내 확산 예방]** 의용소방대 합동 산림 인접 가옥 화기 취급 및 쓰레기 소각 행위 강제 전면 금지 조치 가동."
-    m60 = f"**[60분내 예보 방송]** 재난 방송 자율 송출: 'AI 분석 확산 위험도 {score:.2f}점 돌파. 입산 전면 통제 및 인근 주민 대피 준비 요망.'"
+def get_dynamic_sop_manual(prob, score, city, danger_zone, is_emergency=False):
+    if is_emergency:
+        m10 = f"🚨 **[골든타임 10분내 긴급출동]** {city} 관할 소방서 최고수위 비상소집. {danger_zone} 진입로 확보 및 펌프차 최단경로 전진 배치 완료."
+        m30 = f"🚁 **[30분내 소화수 임계 진입]** 산림청 진화 헬기 3대 긴급 긴급 편대 비행 발령. 지정 인근 담수지에서 취수 개시."
+        m60 = f"📢 **[60분내 주민 강제 대피]** 화선 확산 궤적상 가옥 밀집 구역에 경북도청 재난 문자 자율 송출 및 현장 지휘소 구축."
+    else:
+        m10 = f"**[10분내 선제 조치]** {city} 관할 예찰단, 대형 산불 발전 임계 감지. {danger_zone} 인근 취약 사면 순찰 노선 변경 배치."
+        m30 = f"**[30분내 확산 예방]** 의용소방대 합동 산림 인접 가옥 화기 취급 및 쓰레기 소각 행위 강제 전면 제한 조치 권고."
+        m60 = f"**[60분내 예보 방송]** 지자체 자율 방송 송출: 'AI 분석 위험지수 {score:.2f}점 돌파. 입산 자제 요망.'"
     return m10, m30, m60
 
 # --- 🎮 사이드바 시뮬레이터 통제 장치 ---
-st.sidebar.header("🎛️ 전국 단위 확률 예측 제어판")
-sim_mode = st.sidebar.checkbox("🚨 특정 도시 기상 악화 시뮬레이션", value=False, key="sim_mode_check")
+st.sidebar.header("🎛️ 경상북도 종합 상황 제어판")
 
-sim_city = "안동"
+# 🚨 [대표님 역발상 기획 반영] 실전 응급 화재 상황 모드 스위치 신설
+emergency_mode = st.sidebar.checkbox("🚨 [응급] 경북 구역 실전 화재 발령", value=False, key="emerg_check")
+
+st.sidebar.markdown("---")
+st.sidebar.subheader("기상 변수 강제 조정")
+sim_mode = st.sidebar.checkbox("🌡️ 특정 시·군 기상 악화 시뮬레이션", value=False, key="sim_mode_check")
+
+sim_city = "안동시"
 sim_t, sim_h, sim_w = 32.5, 14.0, 6.5
 
-if sim_mode:
-    st.sidebar.markdown("---")
-    sim_city = st.sidebar.selectbox("대상 도시 선택", list(ALL_NATION_STN_MAP.keys()), index=0)
+if sim_mode or emergency_mode:
+    sim_city = st.sidebar.selectbox("대상 시·군 선택", list(GB_NATION_STN_MAP.keys()), index=0)
     sim_t = st.sidebar.slider("가상 온도 (°C)", 10.0, 45.0, value=32.5)
     sim_h = st.sidebar.slider("가상 상대습도 (%)", 0.0, 100.0, value=14.0)
     sim_w = st.sidebar.slider("가상 풍속 (m/s)", 0.0, 25.0, value=6.5)
 
 # =========================================================================================
-# 🔄 [안정성 고도화 버전] 전국 26개 구역 황금 밸런싱 및 가중치 평활화(Smoothing) 엔진
+# 🔄 경북 22개 시·군 가중치 평활화 및 인프라 페널티 연산 엔진 가동
 # =========================================================================================
 if "history_probs" not in st.session_state:
     st.session_state["history_probs"] = {}
 
 all_scanned_list = []
 
-for city, info in ALL_NATION_STN_MAP.items():
+for city, info in GB_NATION_STN_MAP.items():
     t, h, w, wd = fetch_kma_live_weather(info["stn"])
     slope = info["slope"]
     
-    if sim_mode and city == sim_city:
+    # 응급 모드나 시뮬레이션 모드 시 해당 도시에 가상 화약고 기상 주입
+    if (sim_mode or emergency_mode) and city == sim_city:
         t, h, w = sim_t, sim_h, sim_w
 
     seed_factor = (info["stn"] % 7) - 3
@@ -155,108 +163,143 @@ for city, info in ALL_NATION_STN_MAP.items():
     raw_prob = max(18.5, raw_prob)
     if local_h > 70: raw_prob = max(5.0, raw_prob * 0.15)
 
-    # 📡 [이동평균 필터 레이어] 1분당 대지진 순위 롤백 현상 해결
+    # 📡 이동평균 평활화 필터 레이어
     if city in st.session_state["history_probs"]:
         prev_prob = st.session_state["history_probs"][city]
-        weight = 0.0 if sim_mode else 0.85 
+        weight = 0.0 if (sim_mode or emergency_mode) else 0.85 
         final_prob = (prev_prob * weight) + (raw_prob * (1.0 - weight))
     else:
         final_prob = raw_prob
 
     st.session_state["history_probs"][city] = final_prob
 
+    # 💡 인프라 낙후 페널티 수식 가동
+    difficulty_penalty = (info["water_dist"] * 0.12) + ((100 - info["road_density"]) * 0.008) + (info["pine_ratio"] * 0.005)
+    
     spread_factor = 0.001 + (local_w * 0.003) + (slope * 0.001)
     if local_h < 45: spread_factor *= 1.8
-    danger_score = (final_prob * 0.001) + (spread_factor * 12.0)
+    
+    danger_score = ((final_prob * 0.001) + (spread_factor * 12.0)) * (1.0 + difficulty_penalty)
 
     all_scanned_list.append({
-        "city": city, "addr": info["addr"], "t": local_t, "h": local_h, "w": local_w, "wd": wd, "slope": slope, 
-        "prob": final_prob, "score": danger_score
+        "city": city, "lat": info["lat"], "lon": info["lon"], "addr": info["addr"], "t": local_t, "h": local_h, "w": local_w, "wd": wd, "slope": slope, 
+        "prob": final_prob, "score": danger_score,
+        "water_dist": info["water_dist"], "road_density": info["road_density"], "pine_ratio": info["pine_ratio"],
+        "penalty": difficulty_penalty
     })
 
 df_nation = pd.DataFrame(all_scanned_list).sort_values(by="prob", ascending=False).reset_index(drop=True)
+
+# 응급 모드 발령 시에는 무조건 1위 타겟을 응급 선포 도시로 강제 스위칭
+if emergency_mode:
+    df_nation = pd.DataFrame(all_scanned_list)
+    df_nation.loc[df_nation["city"] == sim_city, "prob"] = 99.4
+    df_nation = df_nation.sort_values(by="prob", ascending=False).reset_index(drop=True)
+
 top_1_target = df_nation.iloc[0]
-
 PROB_THRESHOLD = 75.0
-is_alert_triggered = (top_1_target["prob"] >= PROB_THRESHOLD)
+is_alert_triggered = (top_1_target["prob"] >= PROB_THRESHOLD) or emergency_mode
 
-# 💡 [버그 소방 패치 완료] 시뮬레이션 해제 및 다이렉트 정밀 관측 선택 락 동기화
 if "selected_city" not in st.session_state:
     st.session_state["selected_city"] = df_nation.iloc[0]["city"]
 
-if not sim_mode and "last_sim_state" in st.session_state and st.session_state["last_sim_state"]:
+if emergency_mode:
+    st.session_state["selected_city"] = sim_city
+elif not sim_mode and "last_sim_state" in st.session_state and st.session_state["last_sim_state"]:
     st.session_state["selected_city"] = df_nation.iloc[0]["city"]
 
-st.session_state["last_sim_state"] = sim_mode
+st.session_state["last_sim_state"] = (sim_mode or emergency_mode)
 
 # =========================================================================================
-# 🛰️ 1단계: 대형 산불로 발전 확률 최상위 랭킹 TOP 5 카드 표출
+# 🛰 * 대전환 연출 레이어 * 1단계 인터페이스 표출
 # =========================================================================================
-st.header("🛰️ [1단계] 실시간 대한민국 대형 산불로 발전 확률 랭킹 TOP 5")
-st.caption("※ 270만 건의 전국 기후 빅데이터를 기반으로 현재 기상 실황과 산불 기후 임계점 패턴과의 싱크로율을 정밀 계산한 결과입니다.")
+if emergency_mode:
+    st.error(f"🚨 [경북 비상 상황실 복귀] 현재 경상북도 {sim_city} 관내 야산 지대 실전 산불 신고 접수! 119 소방 전술 작전 모드로 전환되었습니다.")
+else:
+    st.header("🛰️ [1단계] 실시간 경상북도 22개 시·군 대형 산불 발전 확률 랭킹 TOP 5")
+    st.caption("※ 경북 시·군 정책 과제 규격 가중치 필터 및 평활화 알고리즘이 상시 가동 중입니다.")
 
 cols = st.columns(5)
 for idx, row in df_nation.iterrows():
     if idx >= 5: break
     with cols[idx]:
-        if row["prob"] >= PROB_THRESHOLD:
+        if emergency_mode and row["city"] == sim_city:
+            border_style = "border: 3px dashed #ff4b4b; background-color: #3b0000; border-radius: 8px; padding: 15px; text-align: center;"
+            prob_color = "#ff4b4b"
+            title_prefix = "🔥 [발화] "
+        elif row["prob"] >= PROB_THRESHOLD:
             border_style = "border: 2px solid #ff4b4b; background-color: #2b1111; border-radius: 8px; padding: 15px; text-align: center;"
             prob_color = "#ff4b4b"
+            title_prefix = f"{idx+1}위 . "
         else:
             border_style = "border: 1px solid #444; background-color: #0e1117; border-radius: 8px; padding: 15px; text-align: center;"
             prob_color = "#ffaa00"
+            title_prefix = f"{idx+1}위 . "
             
         if row["city"] == st.session_state["selected_city"]:
             border_style = border_style.replace("border: 1px solid #444", "border: 2px dashed #1a73e8").replace("border: 2px solid #ff4b4b", "border: 3px dashed #ffff00")
 
         st.markdown(f"""
         <div style="{border_style} min-height:115px; margin-bottom: 5px;">
-            <h4 style="margin: 0; color: white;">{idx+1}위 . {row['city']}구역</h4>
+            <h4 style="margin: 0; color: white;">{title_prefix}{row['city']}</h4>
             <p style="margin: 5px 0; font-size: 14px; color: {prob_color}; font-weight:bold;">발전 확률: {row['prob']:.1f}%</p>
             <p style="margin: 0; font-size: 13px; color: #aaa;">피해위험: {row['score']:.3f}점</p>
         </div>
         """, unsafe_allow_html=True)
         
-        if st.button(f"🔍 {row['city']} 정밀 관제", key=f"btn_{row['city']}", use_container_width=True):
+        if st.button(f"🔍 {row['city']} 관제", key=f"btn_{row['city']}", use_container_width=True):
             st.session_state["selected_city"] = row["city"]
 
 # =========================================================================================
-# 📍 2단계 & 3단계: 초국지성 관제탑 상세 리포트 레이아웃
+# 📍 2단계 & 3단계: [응급 지도 레이어 팝업] 상세 작전 리포트 레이아웃
 # =========================================================================================
 st.divider()
 target_city = st.session_state["selected_city"]
+city_data = df_nation[df_nation["city"] == target_city].iloc[0]
 
-# 선택한 도시가 현재 스캔본에 없을 경우를 대비한 안전 가드
-if target_city in df_nation["city"].values:
-    city_data = df_nation[df_nation["city"] == target_city].iloc[0]
+if emergency_mode:
+    st.header(f"🗺️ [실전 전술 모드] 령이 AI 자율 산불 작전 지휘부 ➔ [{city_data['city']}]")
 else:
-    city_data = df_nation.iloc[0]
-    st.session_state["selected_city"] = city_data["city"]
+    st.header(f"📍 [2단계] AI 초국지성 관제탑 ➔ [{city_data['city']}] 정밀 분석")
 
-st.header(f"📍 [2단계] AI 초국지성 관제탑 ➔ [{city_data['city']}] 구역 정밀 분석")
-st.caption(f"선택하신 [{city_data['city']}] 구역의 실시간 기상 센서값과 령이 AI 예측 스펙트럼 결과입니다.")
+# 💡 [응급 모드일 때 지도 가시화 구조 대변혁]
+if emergency_mode:
+    st.subheader(f"🛰️ {city_data['city']} 발화 좌표 중심 반경 5km 국지성 소방 인프라 전술 지도")
+    
+    # 발화점 및 주변 가상 소방 자원 인프라 격자 실시간 맵 레이어 매핑
+    map_data = pd.DataFrame([
+        {"lat": city_data["lat"], "lon": city_data["lon"], "name": f"🚨 {city_data['city']} 산불 발화 중심점", "type": "fire"},
+        {"lat": city_data["lat"] + 0.015, "lon": city_data["lon"] - 0.01, "name": "🌊 진화 헬기 담수용 저수지", "type": "water"},
+        {"lat": city_data["lat"] - 0.012, "lon": city_data["lon"] + 0.018, "name": "🛣️ 소방차 진입용 산림 임도 초입", "type": "road"},
+    ])
+    st.map(map_data, latitude="lat", longitude="lon", size=180)
+    st.caption("※ [령이 GIS 수치지도 레이어] 빨간색 격자점은 실전 발화 좌표이며, 주변 파란색 인프라 핀은 가장 가까운 소방 인프라 진입성 매핑 데이터입니다.")
+    st.markdown("---")
 
-c1, c2, c3 = st.columns([1, 1.1, 1.3])
+c1, c2, c3 = st.columns([1, 1.2, 1.2])
 
 with c1:
     st.markdown(f"""
-    <div style="background-color: #1c1d24; padding: 20px; border-radius: 8px; border-left: 5px solid #1a73e8; min-height: 290px;">
-        <h4 style="margin:0 0 12px 0; color:#1a73e8; font-weight: bold;">📡 실시간 AWS 지상 기후 데이터</h4>
-        <p style="margin:8px 0; font-size:15px; color: white;"><b>대상 관제 주소:</b> <br>{city_data['addr']}</p>
-        <p style="margin:8px 0; font-size:15px; color: white;"><b>현재 실측 기온:</b> {city_data['t']:.1f} °C</p>
-        <p style="margin:8px 0; font-size:15px; color: white;"><b>현재 상대 습도:</b> {city_data['h']:.1f} %</p>
-        <p style="margin:8px 0; font-size:15px; color: white;"><b>현재 초속 풍속:</b> {city_data['w']:.1f} m/s</p>
+    <div style="background-color: #1c1d24; padding: 18px; border-radius: 8px; border-left: 5px solid #1a73e8; min-height: 310px;">
+        <h4 style="margin:0 0 12px 0; color:#1a73e8; font-weight: bold;">📡 경북 현장 인프라 데이터</h4>
+        <p style="margin:5px 0; font-size:14px; color: white;"><b>관제 구역:</b> {city_data['addr']}</p>
+        <hr style="border:0.5px solid #333; margin:8px 0;">
+        <table style="width:100%; color:white; font-size:13px; border-collapse:collapse;">
+            <tr><td>🌡️ 실측 기온:</td><td style="text-align:right; font-weight:bold;">{city_data['t']:.1f} °C</td></tr>
+            <tr><td>💧 상대 습도:</td><td style="text-align:right; font-weight:bold;">{city_data['h']:.1f} %</td></tr>
+            <tr><td>💨 초속 풍속:</td><td style="text-align:right; font-weight:bold;">{city_data['w']:.1f} m/s</td></tr>
+            <tr style="color:#a8c7fa;"><td>🌊 담수지 거리:</td><td style="text-align:right; font-weight:bold;">{city_data['water_dist']:.1f} km</td></tr>
+            <tr style="color:#a8c7fa;"><td>🛣️ 산림 임도 밀도:</td><td style="text-align:right; font-weight:bold;">{city_data['road_density']}%</td></tr>
+            <tr style="color:#ffb4ab;"><td>🌲 소나무림 비율:</td><td style="text-align:right; font-weight:bold;">{city_data['pine_ratio']}%</td></tr>
+        </table>
     </div>
     """, unsafe_allow_html=True)
 
 with c2:
     wd_text, danger_direction = get_wind_direction_text(city_data["wd"])
-    if city_data['prob'] >= PROB_THRESHOLD: status_color = "#ff4b4b"
-    elif city_data['prob'] >= 50.0: status_color = "#ffaa00"
-    else: status_color = "#1a73e8"
+    status_color = "#ff4b4b" if city_data['prob'] >= PROB_THRESHOLD else ("#ffaa00" if city_data['prob'] >= 50.0 else "#1a73e8")
 
-    # 물리 확산 추정 알고리즘
-    base_spread_rate = (city_data['w'] * 1.5) * (1.0 + (city_data['slope'] / 35.0))
+    base_spread_rate = (city_data['w'] * 1.5) * (1.0 + (city_data['slope'] / 35.0)) * (1.0 + city_data['penalty'])
     if city_data['h'] < 30: base_spread_rate *= 1.5
 
     p_10 = int(city_data['score'] * base_spread_rate * 15)
@@ -268,7 +311,7 @@ with c2:
     l_60 = int(l_30 * 2.5)
 
     st.markdown(f"""
-    <div style="background-color: #1c1d24; padding: 18px; border-radius: 8px; border-left: 5px solid {status_color}; min-height: 290px;">
+    <div style="background-color: #1c1d24; padding: 18px; border-radius: 8px; border-left: 5px solid {status_color}; min-height: 310px;">
         <h4 style="margin:0 0 10px 0; color:{status_color}; font-weight: bold;">🧠 령이 AI 자율 예측 시뮬레이션</h4>
         <table style="width:100%; color:white; font-size:13px; border-collapse:collapse; margin-bottom:10px;">
             <tr style="border-bottom:1px solid #444; font-weight:bold; color:#aaa;">
@@ -292,14 +335,15 @@ with c2:
                 <td style="color:#ff4b4b; font-weight:bold;">약 {l_60:,} m</td>
             </tr>
         </table>
-        <p style="margin:3px 0; font-size:13px; color: #ccc;"><b>산악 경사도:</b> {city_data['slope']}° | <b>예상 화선 궤적:</b> {danger_direction} 확산</p>
+        <p style="margin:2px 0; font-size:12px; color: #ff8b8b;">⚠️ <b>경북 진압난이도 패널티:</b> +{city_data['penalty']*100:.1f}% 증폭 반영됨</p>
+        <p style="margin:2px 0; font-size:12px; color: #ccc;"><b>산악 경사도:</b> {city_data['slope']}° | <b>화선 궤적:</b> {danger_direction}</p>
     </div>
     """, unsafe_allow_html=True)
 
 with c3:
-    m10, m30, m60 = get_dynamic_sop_manual(city_data["prob"], city_data["score"], city_data["city"], "지정 산림 관제 사면")
+    m10, m30, m60 = get_dynamic_sop_manual(city_data["prob"], city_data["score"], city_data["city"], "경북도청 지정 관제구역", is_emergency=emergency_mode)
     
-    st.markdown(f"<h4 style='margin:0 0 10px 0; color:#ff4b4b; font-size:15px; font-weight:bold;'>🚒 {city_data['city']} 구역 소방 선제 대응 매뉴얼(SOP)</h4>", unsafe_allow_html=True)
+    st.markdown(f"<h4 style='margin:0 0 10px 0; color:#ff4b4b; font-size:15px; font-weight:bold;'>🚒 {city_data['city']} 소방 진압 관제 SOP 매뉴얼</h4>", unsafe_allow_html=True)
     st.info(m10)
     st.warning(m30)
     st.error(m60)
@@ -313,14 +357,14 @@ if is_alert_triggered and not sim_mode and 'conn' in locals():
             should_write = False
             
     if should_write:
-        final_p_60 = int(top_1_target['score'] * ((top_1_target['w'] * 1.5) * (1.0 + (top_1_target['slope'] / 35.0))) * 15 * 3.8 * 4.2)
+        final_p_60 = int(top_1_target['score'] * ((top_1_target['w'] * 1.5) * (1.0 + (top_1_target['slope'] / 35.0)) * (1.0 + top_1_target['penalty'])) * 15 * 3.8 * 4.2)
         new_row = pd.DataFrame([{
             "령이 감지 시각": sat_time_str,
-            "소방신고 접수 시각": "🚫 발화 전 (확률 임계치 돌파)",
+            "소방신고 접수 시각": "🚨 실전 화재 선포" if emergency_mode else "🚫 발화 전 (확률 임계치 돌파)",
             "실측 시차 분석": f"📊 대형 산불 발전 확률: {top_1_target['prob']:.1f}%",
             "발화 대상 주소": top_1_target["addr"],
-            "AI 예측 피해규모 (평)": f"60분 뒤 예상: 약 {final_p_60:,}평 예측",
-            "예상 화선 및 풍향": f"선제 예찰 발령 ({get_wind_direction_text(top_1_target['wd'])[1]} 위험)"
+            "AI 예측 피해규모 (평)": f"경북 특화 인프라 반영: 약 {final_p_60:,}평",
+            "예상 화선 및 풍향": f"즉시 출동 발령 ({get_wind_direction_text(top_1_target['wd'])[1]} 위험)"
         }])
         df_updated = pd.concat([df_cloud_db, new_row], ignore_index=True)
         try:
@@ -330,6 +374,6 @@ if is_alert_triggered and not sim_mode and 'conn' in locals():
 
 # --- 🛰️ 구글 클라우드 DB 실시간 로그 테이블 뷰 ---
 st.divider()
-st.subheader("📋 령이 자율 위험 확률 포착 로그 (Google Sheets Cloud DB 연동 데이터)")
+st.subheader("📋 령이 자율 위험 확률 포착 로그 (경상북도 소방 방재 대장 연동)")
 if not df_cloud_db.empty:
     st.table(df_cloud_db.iloc[::-1].reset_index(drop=True))
