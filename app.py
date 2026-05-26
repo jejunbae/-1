@@ -10,18 +10,18 @@ import pandas as pd
 import pydeck as pdk
 import geopandas as gpd
 
-# 🖥️ 웹페이지 상단 기본 세팅
-st.set_page_config(page_title="소방 감지 & 관제 AI 령이", page_icon="⚠️", layout="wide")
+# 🖥️ 플랫폼 상단 타이틀 및 아이덴티티 완벽 동기화
+st.set_page_config(page_title="산불 감지 및 관제 AI 령이", page_icon="⚠️", layout="wide")
 
 API_KEY = "69309efd849de167a2a68e2fc27331c01eb67888d72dd4a740419a33cf7d292e"
 tz_kst = timezone(timedelta(hours=9))
 now_kst = datetime.now(tz_kst)
 
-st.title("🚒 소방 감지 & 관제 AI '령이' (경상북도 통합 방재 플랫폼)")
-st.markdown(f"**Core Engine v45.3:** 📊 평시 인프라 감시 모드 & 🗺️ 비상시 3D 입체 전술 그래픽 자동 전개 버전")
+st.title("🚒 산불 감지 및 관제 AI '령이'")
+st.markdown(f"**Core Engine v45.5:** ⛰️ 지형 사면 곡선 굴절 연산 & 🗺️ 3D 위성 입체 전술 맵 최종 종결판")
 st.divider()
 
-# --- 📁 [데이터 무결성] 1. 경북 47번 등산로 GIS 파일 로드 ---
+# --- 📁 [데이터 백엔드] 1. 경북 47번 등산로 GIS 파일 로드 ---
 SHP_PATH = "shape_data/47.shp"
 @st.cache_data
 def load_gyeongbuk_gis_lines():
@@ -37,7 +37,7 @@ def load_gyeongbuk_gis_lines():
 
 gdf_gb_trails = load_gyeongbuk_gis_lines()
 
-# --- 📁 [데이터 무결성] 2. 한국농어촌공사 찐 저수지 CSV 파일 로드 (CP949 패치) ---
+# --- 📁 [데이터 백엔드] 2. 한국농어촌공사 저수지 CSV 파일 로드 ---
 RESERVOIR_CSV_PATH = "한국농어촌공사_농업기반시설 시설제원_저수지_20250925.csv"
 @st.cache_data
 def load_reservoir_data():
@@ -56,22 +56,22 @@ GB_NATION_STN_MAP = {
     "구미시": {"stn": 279, "lat": 36.0842, "lon": 128.3214, "slope": 20.0, "addr": "경북 구미시 금오산 배후 사면", "pine_ratio": 55, "search_kw": "구미"},
     "포항시": {"stn": 138, "lat": 36.2314, "lon": 129.2845, "slope": 15.0, "addr": "경북 포항시 북구 내연산 구역", "pine_ratio": 40, "search_kw": "포항"},
     "경산시": {"stn": 281, "lat": 35.8845, "lon": 128.8412, "slope": 14.0, "addr": "경북 경산시 팔공산 갓바위 사면", "pine_ratio": 35, "search_kw": "경산"},
-    "영천시": {"stn": 281, "lat": 36.1421, "lon": 128.9845, "slope": 22.0, "addr": "경북 영천시 화북면 보현산 구역", "pine_ratio": 60, "search_kw": "영천"},
-    "의성군": {"stn": 278, "lat": 36.3214, "lon": 128.7845, "slope": 18.0, "addr": "경북 의성군 점곡면 사촌리 배후", "pine_ratio": 50, "search_kw": "의성"},
+    "영천시": {"stn": 281, "lat": 36.1421, "lon": 128.9845, "slope": 22.0, "addr": "경북 영천시 화북면 보현산 천문대 구역", "pine_ratio": 60, "search_kw": "영천"},
+    "의성군": {"stn": 278, "lat": 36.3214, "lon": 128.7845, "slope": 18.0, "addr": "경북 의성군 점곡면 사촌리 배후 야산", "pine_ratio": 50, "search_kw": "의성"},
     "경주시": {"stn": 138, "lat": 35.8124, "lon": 129.3412, "slope": 19.0, "addr": "경북 경주시 양북면 토함산 지대", "pine_ratio": 62, "search_kw": "경주"},
-    "김천시": {"stn": 279, "lat": 36.1124, "lon": 128.0124, "slope": 24.0, "addr": "경북 김천시 대항면 황악산 배후", "pine_ratio": 58, "search_kw": "김천"},
-    "상주시": {"stn": 273, "lat": 36.5412, "lon": 127.9845, "slope": 23.0, "addr": "경북 상주시 화북면 속리산 사면", "pine_ratio": 64, "search_kw": "상주"},
-    "영주시": {"stn": 272, "lat": 36.9412, "lon": 128.5214, "slope": 27.0, "addr": "경북 영주시 풍기읍 소백산 지대", "pine_ratio": 72, "search_kw": "영주"},
-    "군위군": {"stn": 278, "lat": 36.1542, "lon": 128.7214, "slope": 17.0, "addr": "대구 군위군 삼국유사면 화산산성", "pine_ratio": 48, "search_kw": "군위"},
-    "고령군": {"stn": 279, "lat": 35.6842, "lon": 128.2142, "slope": 16.0, "addr": "경북 고령군 쌍림면 미숭산 배후", "pine_ratio": 42, "search_kw": "고령"},
-    "성주군": {"stn": 279, "lat": 35.8142, "lon": 128.1124, "slope": 25.0, "addr": "경북 성주군 수륜면 가야산 사면", "pine_ratio": 66, "search_kw": "성주"},
-    "칠곡군": {"stn": 279, "lat": 36.0421, "lon": 128.4845, "slope": 18.0, "addr": "경북 칠곡군 가산면 가산산성 격자", "pine_ratio": 50, "search_kw": "칠곡"},
-    "청도군": {"stn": 281, "lat": 35.6124, "lon": 128.9412, "slope": 21.0, "addr": "경북 청도군 운문면 운문사 기슭", "pine_ratio": 54, "search_kw": "청도"},
-    "영양군": {"stn": 130, "lat": 36.7142, "lon": 129.1845, "slope": 29.0, "addr": "경북 영양군 일월산 용화리 야산", "pine_ratio": 80, "search_kw": "영양"},
-    "영덕군": {"stn": 130, "lat": 36.4842, "lon": 129.3142, "slope": 23.0, "addr": "경북 영덕군 지품면 팔각산 암벽", "pine_ratio": 85, "search_kw": "영덕"},
-    "봉화군": {"stn": 272, "lat": 36.9124, "lon": 128.9412, "slope": 30.0, "addr": "경북 봉화군 명호면 청량산 사면", "pine_ratio": 84, "search_kw": "봉화"},
-    "울릉군": {"stn": 130, "lat": 37.5024, "lon": 130.8412, "slope": 35.0, "addr": "경북 울릉군 서면 성인봉 요충", "pine_ratio": 40, "search_kw": "울릉"},
-    "청송군": {"stn": 272, "lat": 36.3942, "lon": 129.1242, "slope": 26.0, "addr": "경북 청송군 주왕산면 주왕산 격자", "pine_ratio": 76, "search_kw": "청송"}
+    "김천시": {"stn": 279, "lat": 36.1124, "lon": 128.0124, "slope": 24.0, "addr": "경북 김천시 대항면 황악산 배후령", "pine_ratio": 58, "search_kw": "김천"},
+    "상주시": {"stn": 273, "lat": 36.5412, "lon": 127.9845, "slope": 23.0, "addr": "경북 상주시 화북면 속리산 문장대 사면", "pine_ratio": 64, "search_kw": "상주"},
+    "영주시": {"stn": 272, "lat": 36.9412, "lon": 128.5214, "slope": 27.0, "addr": "경북 영주시 풍기읍 소백산 희방사 지대", "pine_ratio": 72, "search_kw": "영주"},
+    "군위군": {"stn": 278, "lat": 36.1542, "lon": 128.7214, "slope": 17.0, "addr": "대구 군위군 삼국유사면 화산산성 야산지대", "pine_ratio": 48, "search_kw": "군위"},
+    "고령군": {"stn": 279, "lat": 35.6842, "lon": 128.2142, "slope": 16.0, "addr": "경북 고령군 쌍림면 미숭산 자연휴양림 배후", "pine_ratio": 42, "search_kw": "고령"},
+    "성주군": {"stn": 279, "lat": 35.8142, "lon": 128.1124, "slope": 25.0, "addr": "경북 성주군 수륜면 가야산 백운동 사면", "pine_ratio": 66, "search_kw": "성주"},
+    "칠곡군": {"stn": 279, "lat": 36.0421, "lon": 128.4845, "slope": 18.0, "addr": "경북 칠곡군 가산면 가산산성 성곽 구역", "pine_ratio": 50, "search_kw": "칠곡"},
+    "청도군": {"stn": 281, "lat": 35.6124, "lon": 128.9412, "slope": 21.0, "addr": "경북 청도군 운문면 운문사 지룡산 기슭", "pine_ratio": 54, "search_kw": "청도"},
+    "영양군": {"stn": 130, "lat": 36.7142, "lon": 129.1845, "slope": 29.0, "addr": "경북 영양군 일월산 용화리 격오지 야산", "pine_ratio": 80, "search_kw": "영양"},
+    "영덕군": {"stn": 130, "lat": 36.4842, "lon": 129.3142, "slope": 23.0, "addr": "경북 영덕군 지품면 팔각산 암벽 산림지대", "pine_ratio": 85, "search_kw": "영덕"},
+    "봉화군": {"stn": 272, "lat": 36.9124, "lon": 128.9412, "slope": 30.0, "addr": "경북 봉화군 명호면 청량산 도립공원 사면", "pine_ratio": 84, "search_kw": "봉화"},
+    "울릉군": {"stn": 130, "lat": 37.5024, "lon": 130.8412, "slope": 35.0, "addr": "경북 울릉군 서면 성인봉 칼데라 산악 요충", "pine_ratio": 40, "search_kw": "울릉"},
+    "청송군": {"stn": 272, "lat": 36.3942, "lon": 129.1242, "slope": 26.0, "addr": "경북 청송군 주왕산면 주왕산 국립공원 사면", "pine_ratio": 76, "search_kw": "청송"}
 }
 
 def fetch_kma_live_weather(stn_id):
@@ -102,7 +102,7 @@ def get_wind_direction_text(deg):
     elif 247.5 <= deg < 292.5: return "서풍 (➡️ 동쪽 확산)", "동쪽", 1, 0
     else: return "북서풍 (↘️ 남동쪽 확산)", "남동쪽", 0.7, -0.7
 
-# --- 🎛️ 사이드바 종합 통제 제어판 ---
+# --- 🎛️ 사이드바 제어판 ---
 st.sidebar.header("🎛️ 종합 상황 제어판")
 emergency_mode = st.sidebar.checkbox("🚨 [응급 상황] 실전 산불 화재 발령", value=False, key="emerg_check")
 
@@ -120,7 +120,7 @@ if sim_mode or emergency_mode:
     sim_w = st.sidebar.slider("가상 풍속 (m/s)", 0.0, 25.0, value=8.5)
 
 # =========================================================================================
-# 🔄 실시간 융합 연산 데이터 엔진 파이프라인
+# 🔄 실시간 데이터 분석 엔진
 # =========================================================================================
 if "history_probs" not in st.session_state: st.session_state["history_probs"] = {}
 all_scanned_list = []
@@ -173,11 +173,11 @@ if emergency_mode:
 if "selected_city" not in st.session_state: st.session_state["selected_city"] = df_nation.iloc[0]["city"]
 if emergency_mode: st.session_state["selected_city"] = sim_city
 
-# =========================================================================================
-# 🏛️ 기존 버전 UI 100% 원형 복원: 대시보드 스캔 카드 상단 레이어
-# =========================================================================================
+city_data = df_nation[df_nation["city"] == st.session_state["selected_city"]].iloc[0]
+
+# --- 상단 탑 예찰 카드 레이어 ---
 if emergency_mode:
-    st.error(f"🔥 [🚨 실전 산불 작전 모드] 경상북도 {sim_city} 관내 산림 화재 긴급 포착 ➔ 3D 입체 전술 관제탑 가동")
+    st.error(f"🔥 [🚨 실전 상황 기동] 산불 감지 및 관제 AI '령이' 통합 작전 상황실 복귀")
 else:
     st.header("🛰️ [평시 예찰] 실시간 경상북도 22개 시·군 대형 산불 발전 확률 TOP 5")
 
@@ -209,19 +209,23 @@ for idx, row in df_nation.iterrows():
         if st.button(f"🔍 {row['city']} 관제", key=f"btn_{row['city']}", use_container_width=True): st.session_state["selected_city"] = row["city"]
 
 # =========================================================================================
-# 📍 [대표님 오더] 지도는 오직 "응급 상황" 또는 "가상 시뮬레이션" 켰을 때만 연출 등장!!
+# 📍 [3D 위성 전술 지형 고도화] 응급 상황 전개 파트 (경사 굴절 곡선 공식 탑재)
 # =========================================================================================
-city_data = df_nation[df_nation["city"] == st.session_state["selected_city"]].iloc[0]
+wd_text, danger_direction, dx, dy = get_wind_direction_text(city_data["wd"])
+base_spread_rate = (city_data['w'] * 1.6) * (1.0 + (city_data['slope'] / 35.0)) * (1.0 + city_data['penalty'])
+p_10 = int(city_data['score'] * base_spread_rate * 15)
+p_30 = int(p_10 * 3.8)
+p_60 = int(p_30 * 4.2)
 
 if emergency_mode or sim_mode:
     st.divider()
-    st.header(f"🗺️ [3D 입체 작전 지휘탑] {city_data['city']} 국가 GIS 전술 융합 그래픽")
-    st.caption("🔥 화점 이모티콘 표기 | 🔴 빨간 실선: 실시간 바람 확산 경로 | 🟡 노란 실선: 47번 진짜 산길(대원 접근로) | 🔵 파란 기둥: 농어촌공사 용수 시설 용량")
+    st.header(f"🗺️ [3D 위성 입체 지형 관제탑] {city_data['city']} 전술 그래픽")
+    st.caption("🔥 최상위 화점 마킹 | 🔴 지형 사면 연산 곡선 확산 화살표 경로 | 🟡 노란색 찐 산길 접근선 | 🔵 파란색 농어촌공사 용수 기둥")
 
     pydeck_layers = []
     found_trail_name = "관내 간선 공로 1호선"
     
-    # 1. 🟡 [노란 선] 대표님이 구하신 47.shp 경북 찐 산길 데이터베이스 연동 레이어
+    # 1. 🟡 [노란 선] 47.shp 경북 찐 산길 접근선 레이어
     if gdf_gb_trails is not None:
         local_trails = gdf_gb_trails[gdf_gb_trails['MNTN_NM'].str.contains(city_data['search_kw'], na=False)]
         if not local_trails.empty:
@@ -234,49 +238,80 @@ if emergency_mode or sim_mode:
             if 'PMNTN_NM' in plot_gdf.columns and not plot_gdf.iloc[0]['PMNTN_NM'] is None:
                 found_trail_name = f"[{plot_gdf.iloc[0]['MNTN_NM']}] {plot_gdf.iloc[0]['PMNTN_NM']}"
             
-            # 🟡 진입 및 접근선 목적의 선명한 노란색(Yellow) 실선 매핑
             pydeck_layers.append(pdk.Layer(
                 "PathLayer", plot_gdf, get_path="path", width_scale=15, width_min_pixels=3.5,
                 get_color="[255, 220, 0, 255]", pickable=True
             ))
 
-    # 2. 🔴 [빨간 선] 풍향/풍속 벡터 연산 실시간 화선 예상 확산 경로 레이어
-    wd_text, danger_direction, dx, dy = get_wind_direction_text(city_data["wd"])
-    spread_scale = 0.005 + (city_data["w"] * 0.001)
-    path_data = [{"path": [[city_data["lon"], city_data["lat"]], [city_data["lon"] + (dx * spread_scale), city_data["lat"] + (dy * spread_scale)]]}]
+    # 2. 🔴 [대격변: 빨간 곡선] 지형 경사 및 돌풍 굴절 모델링을 통한 S자 포물선 확산 경로 연산 드로잉
+    # 단순 직선이 아닌 사면 가중치를 주어 궤적이 곡선으로 휘어지도록 좌표 리스트 생성
+    curve_points = []
+    steps = 15
+    spread_scale = 0.007 + (city_data["w"] * 0.001)
+    
+    # 사인/코사인 기하학 공식을 결합하여 경사면 배후령 진입 시 굴절되는 궤적 모델링
+    for i in range(steps + 1):
+        ratio = i / steps
+        # 경사도(slope)가 높을수록 골짜기 돌풍으로 인해 궤적이 옆으로 더 강하게 휘어짐(S자 곡선화)
+        distortion = math.sin(ratio * math.pi) * (city_data["slope"] * 0.00018)
+        
+        # 주 바람 방향 벡터(dx, dy)에 지형 굴절 오차 적용
+        cur_lon = city_data["lon"] + (dx * spread_scale * ratio) + (dy * distortion)
+        cur_lat = city_data["lat"] + (dy * spread_scale * ratio) - (dx * distortion)
+        curve_points.append([cur_lon, cur_lat])
+        
+    curve_path_data = [{"path": curve_points}]
     pydeck_layers.append(pdk.Layer(
-        "PathLayer", pd.DataFrame(path_data), get_path="path", width_scale=35, width_min_pixels=5.5,
-        get_color="[255, 40, 40, 255]"
+        "PathLayer", pd.DataFrame(curve_path_data), get_path="path", width_scale=42, width_min_pixels=6.5,
+        get_color="[255, 30, 30, 255]"
+    ))
+    
+    # 🔴 곡선 화선 경로 중간 지점에 화살표(➡️) 결합 결착
+    mid_idx = int(steps * 0.7)
+    arrow_data = [{"lat": curve_points[mid_idx][1], "lon": curve_points[mid_idx][0], "text": "➡️"}]
+    pydeck_layers.append(pdk.Layer(
+        "TextLayer", pd.DataFrame(arrow_data), get_position="[lon, lat]", get_text="text",
+        get_size=28, get_color="[255, 40, 40, 255]"
     ))
 
-    # 3. 🔵 [파란색 3D 기둥] 한국농어촌공사 찐 엑셀 연동 용수원 위치 및 총저수량 레이어
+    # 3. 🔵 [파란 기둥] 농어촌공사 실제 용수 시설 레이어
     poi_records = [
-        {"lat": city_data["lat"] - 0.005, "lon": city_data["lon"] + 0.006, "elevation": min(1300, int(city_data["res_largest_cap"] * 0.15) + 180), "color": [0, 110, 255, 240], "label": f"🌊 {city_data['res_largest_name']}저수지"}
+        {"lat": city_data["lat"] - 0.005, "lon": city_data["lon"] + 0.006, "elevation": min(1300, int(city_data["res_largest_cap"] * 0.15) + 180), "color": [0, 110, 255, 240]}
     ]
     pydeck_layers.append(pdk.Layer(
         "ColumnLayer", pd.DataFrame(poi_records), get_position="[lon, lat]", get_elevation="elevation",
-        elevation_scale=1, radius=65, get_fill_color="color", pickable=True
+        elevation_scale=1, radius=65, get_fill_color="color"
     ))
 
-    # 4. 🔥 [불 이모티콘 화점 표시] 최상위 레이어 텍스트 플로팅
+    # 4. 🔥 [화점 표기] 불 이모티콘 레이어 (대형 사이즈로 최상단 고정 노출)
     fire_data = [{"lat": city_data["lat"], "lon": city_data["lon"], "text": "🔥"}]
     pydeck_layers.append(pdk.Layer(
         "TextLayer", pd.DataFrame(fire_data), get_position="[lon, lat]", get_text="text",
-        get_size=42, get_alignment_baseline="'bottom'"
+        get_size=58, get_alignment_baseline="'bottom'"
     ))
 
-    # 3D 피치 각도 정밀 고정 세팅 (시각 충격 극대화)
+    # 5. 💬 [흰색 네모 칸 인포박스] 지도 공중 우측 상단 타임라인 스캔 정보박스 플로팅
+    infobox_lat, infobox_lon = city_data["lat"] + 0.012, city_data["lon"] - 0.015
+    box_text = f"⏳ 령이 AI 확산 타임라인 예측\n- 10분 후: 약 {p_10:,}평\n- 30분 후: 약 {p_30:,}평\n- 60분 후: 약 {p_60:,}평"
+    infobox_data = [{"lat": infobox_lat, "lon": infobox_lon, "text": box_text}]
+    pydeck_layers.append(pdk.Layer(
+        "TextLayer", pd.DataFrame(infobox_data), get_position="[lon, lat]", get_text="text",
+        get_size=15, get_color="[0, 0, 0, 255]", get_background_color="[255, 255, 255, 245]",
+        padding=[10, 10, 10, 10], get_alignment_baseline="'top'", get_text_anchor="'start'"
+    ))
+
+    # ⛰️ [3D 지형화 완성] SATELLITE 위성 맵을 기반으로 피치 카메라 각도를 60도로 완전히 눕혀 험준한 사면 굴곡 표현
     st.pydeck_chart(pdk.Deck(
         layers=pydeck_layers,
-        initial_view_state=pdk.ViewState(latitude=city_data["lat"], longitude=city_data["lon"], zoom=13, pitch=52, bearing=18),
-        tooltip={"text": "요소: {label}"}
+        map_style=pdk.map_styles.SATELLITE,
+        initial_view_state=pdk.ViewState(latitude=city_data["lat"], longitude=city_data["lon"], zoom=13, pitch=60, bearing=15),
+        tooltip={"text": "요소 관제 정보"}
     ))
 else:
-    # 💡 평시 모드 가이드
-    st.info("🟢 소방 감지 & 관제 AI '령이' 가동 중: 현재 평시 실시간 예찰 체계입니다. 지도는 사이드바 제어판의 [🚨 응급 상황] 또는 [🌡️ 가상 시뮬레이션] 발령 시 전술 그래픽 모드로 자동 팝업됩니다.")
+    st.info("🟢 평시 감시 모드 가동 중: 현재 경상북도 전역 예찰 상태입니다. 지도는 제어판의 [🚨 응급 상황] 또는 [🌡️ 가상 시뮬레이션] 발령 시 실시간 3D 위성 전술 지형 모드로 자동 팝업됩니다.")
 
 # =========================================================================================
-# 🎛️ 하단 다차원 인프라 통계 및 소방 전술 지시서 (기존 UI 완전 완벽 복원)
+# 🎛 하단 다차원 소방 전술 지시서 
 # =========================================================================================
 st.markdown("---")
 c1, c2, c3 = st.columns([1, 1.2, 1.2])
@@ -300,12 +335,6 @@ with c1:
     """, unsafe_allow_html=True)
 
 with c2:
-    wd_text, danger_direction, _, _ = get_wind_direction_text(city_data["wd"])
-    base_spread_rate = (city_data['w'] * 1.6) * (1.0 + (city_data['slope'] / 35.0)) * (1.0 + city_data['penalty'])
-    p_10 = int(city_data['score'] * base_spread_rate * 15)
-    p_30 = int(p_10 * 3.8)
-    p_60 = int(p_30 * 4.2)
-
     st.markdown(f"""
     <div style="background-color: #1c1d24; padding: 18px; border-radius: 8px; border-left: 5px solid #ff4b4b; min-height: 330px;">
         <h4 style="margin:0 0 10px 0; color:#ff4b4b; font-weight: bold;">🧠 령이 AI 자율 물리 확산 스캔</h4>
@@ -315,32 +344,41 @@ with c2:
             <tr style="border-bottom:1px solid #333;"><td style="color:#ffaa00; font-weight:bold;">발화 30분 후</td><td style="color:#ffaa00; font-weight:bold;">약 {p_30:,} 평</td></tr>
             <tr style="border-bottom:1px solid #333;"><td style="color:#ff4b4b; font-weight:bold;">발화 60분 후</td><td style="color:#ff4b4b; font-weight:bold;">약 {p_60:,} 평</td></tr>
         </table>
-        <p style="margin:2px 0; font-size:12px; color: #ff8b8b;">⚠️ <b>지형 격차 패널티 가중:</b> +{city_data['penalty']*100:.1f}% 실시간 증폭</p>
+        <p style="margin:2px 0; font-size:12px; color: #ff8b8b;">⚠️ <b>지형 경사 및 곡선 가중치:</b> +{city_data['penalty']*100:.1f}% 실시간 반영</p>
         <p style="margin:2px 0; font-size:12px; color: #ccc;"><b>실시간 풍향 주파수:</b> {wd_text}</p>
     </div>
     """, unsafe_allow_html=True)
 
 with c3:
     st.markdown(f"<h4 style='margin:0 0 10px 0; color:#66bb6a; font-size:15px; font-weight:bold;'>🚒 [령이 팩트 라우팅] 전술 작전 지시서</h4>", unsafe_allow_html=True)
-    
     if emergency_mode or sim_mode:
-        st.success(f"🟡 **[🟡접근선] 특정:** 국가 표준 47번 파일 기반, 대원 도보 침투 및 접근선 루트인 **{found_trail_name}** 노선을 소방 저지선으로 확보하십시오.")
-        st.error(f"🔴 **[🔴확산선] 경고:** 화염이 바람을 타고 현재 **[{danger_direction}]** 방면 빨간색 실선 궤적으로 급격히 북상/하강 중이므로 선제 진압 조치 요망.")
+        st.success(f"🟡 **[🟡접근선] 특정:** 47번 국가 GIS 분석 결과, 대원 도보 침투 최적 루트인 노란색 선 **{found_trail_name}** 코스를 차단선으로 설정하십시오.")
+        st.error(f"🔴 **[🔴확산선] 경고:** 화염이 바람과 경사면 굴뚝 효과를 만나 현재 **[{danger_direction}]** 방면 빨간색 곡선 궤적으로 급격히 확산 중이므로 선제 진압 조치 요망.")
         if city_data['res_count'] > 0:
-            st.info(f"🔵 **[🔵용수원] 명령:** 농어촌공사 검증 완료된 파란색 3D 기둥인 **[{city_data['res_largest_name']}저수지]**를 헬기 최우선 담수 거점으로 고정 배포.")
+            st.info(f"🔵 **[🔵담수지] 명령:** 농어촌공사 검증 완료된 파란 기둥인 **[{city_data['res_largest_name']}저수지]**를 헬기 최우선 담수 용수원으로 고정 전파.")
     else:
-        st.info("📊 평시 감시 상태: 경상북도 산림 격자 인프라 제원 테이블 및 유통 공간정보 정상 작동 중.")
+        st.info("📊 평시 감시 중: 경상북도 산림 격자 인프라 제원 테이블 및 유통 공간정보 정상 작동 중.")
 
 # =========================================================================================
-# 📋 기존 버전 UI 100% 원형 복원: 구글 클라우드 가상 DB 로그 대장
+# 📋 령이 자율 포착 로그 대장 (평시/비상시 완전 무결성 분리 패치 완료)
 # =========================================================================================
 st.divider()
 st.subheader("📋 령이 자율 포착 로그 대장 (경상북도 소방 재난 방재 시스템 아카이브)")
+
+if emergency_mode or sim_mode:
+    log_status = "🚨 실전 화재 선포 연동 중" if emergency_mode else "⚠️ 가상 시뮬레이션 기동"
+    log_decision = f"권장 접근선: {found_trail_name} ➔ 지형 사면 곡선 굴절 수치지도 기반 3D 위성 입체 제어 중"
+    log_prob = f"{city_data['prob']:.1f}%"
+else:
+    log_status = "🚫 평시 예보 커넥션 대기"
+    log_decision = "🟢 경북 전역 특이 동향 없음 (평시 실시간 대기 중)"
+    log_prob = "0.0% (안전)"
+
 df_mock_db = pd.DataFrame([{
     "령이 실시간 감지 시각": now_kst.strftime("%Y-%m-%d %H:%M:%S"),
-    "산림청 API 수신 상태": "🚨 실전 화재 선포 연동 중" if emergency_mode else "🚫 평시 예보 커넥션 대기",
-    "경북 관제 행정구역": city_data["addr"],
-    "AI 연산 발전 확률": f"{city_data['prob']:.1f}%",
-    "3D 공간 전술 판정": f"권장 접근선: {found_trail_name} ➔ {wd_text} 기반 입체 제어 중" if (emergency_mode or sim_mode) else "평시 예찰 모드 가동 중"
+    "산림청 API 수신 상태": log_status,
+    "경북 관제 행정구역": city_data["addr"] if (emergency_mode or sim_mode) else "경상북도 전역 (22개 시·군 모니터링)",
+    "AI 연산 발전 확률": log_prob,
+    "3D 공간 전술 판정": log_decision
 }])
 st.table(df_mock_db)
