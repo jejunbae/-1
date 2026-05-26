@@ -8,10 +8,12 @@ import json
 from datetime import datetime, timedelta, timezone
 import pandas as pd
 import pydeck as pdk
-import gpd = None
+
+# 🧠 [오류 해결] geopandas 라이브러리 안전 안전망 빌드
+gpd = None
 try:
     import geopandas as gpd
-except:
+except ImportError:
     pass
 
 # 🖥️ 플랫폼 아이덴티티 및 상단 세팅
@@ -22,7 +24,7 @@ tz_kst = timezone(timedelta(hours=9))
 now_kst = datetime.now(tz_kst)
 
 st.title("🚒 산불 감지 및 관제 AI '령이'")
-st.markdown(f"**Core Engine v45.7:** 🗺️ 타임라인 전술 인포박스 개별 분리 매핑 & 3D 다크 벡터 레이어 연출본")
+st.markdown(f"**Core Engine v45.8:** 🗺️ 타임라인 개별 분리 배치 & 3D 전술 다크 벡터 레이어 종결 버전")
 st.divider()
 
 # --- 📁 [데이터 백엔드] 1. 경북 47번 등산로 GIS 파일 로드 ---
@@ -107,7 +109,7 @@ def get_wind_direction_text(deg):
     elif 247.5 <= deg < 292.5: return "서풍 (➡️ 동쪽 확산)", "동쪽", 1, 0
     else: return "북서풍 (↘️ 남동쪽 확산)", "남동쪽", 0.7, -0.7
 
-# --- 🎛️ 사이드바 종합 통제 제어판 ---
+# --- 🎛️ 사이드바 제어판 ---
 st.sidebar.header("🎛️ 종합 상황 제어판")
 emergency_mode = st.sidebar.checkbox("🚨 [응급 상황] 실전 산불 화재 발령", value=False, key="emerg_check")
 
@@ -125,7 +127,7 @@ if sim_mode or emergency_mode:
     sim_w = st.sidebar.slider("가상 풍속 (m/s)", 0.0, 25.0, value=8.5)
 
 # =========================================================================================
-# 🔄 실시간 융합 연산 데이터 엔진 파이프라인
+# 🔄 실시간 데이터 연산 파이프라인
 # =========================================================================================
 if "history_probs" not in st.session_state: st.session_state["history_probs"] = {}
 all_scanned_list = []
@@ -182,7 +184,7 @@ city_data = df_nation[df_nation["city"] == st.session_state["selected_city"]].il
 
 # --- 상단 탑 카드 레이어 ---
 if emergency_mode:
-    st.error(f"🔥 [🚨 실전 소방 지휘 모드] 산불 감지 및 관제 AI '령이' 위성 통제 작전실 작동")
+    st.error(f"🔥 [🚨 실전 상황 기동] 산불 감지 및 관제 AI '령이' 통합 작전 상황실 복귀")
 else:
     st.header("🛰️ [평시 예찰] 실시간 경상북도 22개 시·군 대형 산불 발전 확률 TOP 5")
 
@@ -251,7 +253,7 @@ if emergency_mode or sim_mode:
     # 2. 🔴 [빨간 곡선] 지형 사면 연산 시뮬레이션 포물선 화선 확산 레이어 빌드
     curve_points = []
     steps = 20
-    spread_scale = 0.010 + (city_data["w"] * 0.001) # 가시성 확보를 위해 경로 스케일 증폭
+    spread_scale = 0.010 + (city_data["w"] * 0.001) 
     
     for i in range(steps + 1):
         ratio = i / steps
@@ -266,7 +268,7 @@ if emergency_mode or sim_mode:
         get_color="[255, 30, 30, 255]"
     ))
 
-    # 3. 🔵 [파란 기둥] 농어촌공사 실제 용수 시설 레이어 (높이 웅장화 패치)
+    # 3. 🔵 [파란 기둥] 농어촌공사 실제 용수 시설 레이어
     poi_records = [
         {"lat": city_data["lat"] - 0.004, "lon": city_data["lon"] + 0.005, "elevation": min(1400, int(city_data["res_largest_cap"] * 0.20) + 200), "color": [0, 110, 255, 240]}
     ]
@@ -283,8 +285,8 @@ if emergency_mode or sim_mode:
         line_width_min_pixels=2
     ))
 
-    # 5. ⬜ [대표님 오더 반영] 시간대별 예상 확산 범위에 맞게 개별 상자(인포박스) 분리 배치 장치
-    # 뭉쳐있던 박스를 해체하고, 빨간 곡선 선로 위 10분, 30분, 60분 도달 좌표에 흰색 전술 칸을 정밀 투하합니다.
+    # 5. ⬜ [대표님 지시 완벽 반영] 시간대별 예상 확산 범위에 맞게 개별 상자(인포박스) 분리 배치
+    # 곡선 궤적 위의 10분, 30분, 60분 도달 시점마다 하얀색 사각형 전술 상자를 자석처럼 따로따로 꽂아줍니다.
     timeline_boxes = [
         {"lon": curve_points[int(steps * 0.25)][0], "lat": curve_points[int(steps * 0.25)][1] + 0.001, "text": f"⬜ [10분 후 전선]\n피해예측: 약 {p_10:,}평\n방향: ➡️ 진격 중"},
         {"lon": curve_points[int(steps * 0.60)][0], "lat": curve_points[int(steps * 0.60)][1] + 0.001, "text": f"⬜ [30분 후 전선]\n피해예측: 약 {p_30:,}평\n주의: ➡️ 확산 가속"},
@@ -297,7 +299,7 @@ if emergency_mode or sim_mode:
         padding=[8, 10, 8, 10], get_alignment_baseline="'bottom'", get_text_anchor="'center'"
     ))
 
-    # ⛰️ 토큰 유무에 관계없이 100% 장엄한 입체 그래픽이 렌더링되는 전술 다크 뷰 레이아웃 적용
+    # ⛰️ [지도가 안 뜨던 버그 완벽 정복] 토큰에 구애받지 않는 스트림릿 빌드인 표준 다크 스타일 뷰포트 고정 (피치 58도 3D화 완료)
     st.pydeck_chart(pdk.Deck(
         layers=pydeck_layers,
         map_style=pdk.map_styles.DARK,
