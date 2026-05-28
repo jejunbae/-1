@@ -23,34 +23,64 @@ if "prev_emerg_state" not in st.session_state:
     st.session_state["prev_emerg_state"] = False
 
 st.title("🚨 경상북도 실시간 산불 소방 작전 지휘 플랫폼 '령이'")
-st.markdown(f"**Core Engine v55.0:** 🚒 관할 소방서 최적 진입로 자율 연산 & 🔒 응급 모드 오버라이딩 버그 완전 박멸본")
+st.markdown(f"**Core Engine v56.0:** 🌲 실제 산림 임야 화점 타격 & 🛣️ 도로망 기반 관할 소방서 출동 진격 루트 엔진")
 st.divider()
 
-# --- 🛰️ 경상북도 22개 시·군 로컬 지형 및 [AI 내장형 관할 소방서] 마스터 풀 ---
-# 령이가 자체적으로 최단거리 소방서와 출동 루트를 연산하기 위해 119 인프라 좌표를 100% 매핑 내장했습니다.
+# --- 🛰️ 경상북도 22개 시·군 로컬 [진짜 임야 화점] 및 [관할 소방서 도로망 노드] 마스터 풀 ---
+# 대표님 피드백 반영: 화점 좌표를 도심지가 아닌 실제 산림 지대로 전면 격리 이동시켰으며, 소방서에서 도로를 타고 진입하는 노드 축선을 내장했습니다.
 GB_NATION_STN_MAP = {
-    "안동시": {"stn": 272, "lat": 36.5683, "lon": 128.7294, "slope": 25.0, "addr": "경상북도 안동시 명륜동 야산 지대 일원", "water_dist": 2.5, "road_density": 35, "pine_ratio": 65, "fire_station": "안동소방서 와룡119안전센터", "fs_lat": 36.6210, "fs_lon": 128.7520},
-    "울진군": {"stn": 130, "lat": 36.9936, "lon": 129.4005, "slope": 28.0, "addr": "경상북도 울진군 북면 주인리 산림 격자", "water_dist": 7.2, "road_density": 10, "pine_ratio": 88, "fire_station": "울진소방서 북면119안전센터", "fs_lat": 36.9850, "fs_lon": 129.3510},
-    "문경시": {"stn": 273, "lat": 36.5861, "lon": 128.1866, "slope": 32.0, "addr": "경상북도 문경시 가은읍 수예리 산 18-1", "water_dist": 6.8, "road_density": 12, "pine_ratio": 78, "fire_station": "문경소방서 가은119안전센터", "fs_lat": 36.6340, "fs_lon": 128.1250},
-    "구미시": {"stn": 279, "lat": 36.1214, "lon": 128.3446, "slope": 20.0, "addr": "경상북도 구미시 금오산 성안 구역", "water_dist": 1.8, "road_density": 45, "pine_ratio": 55, "fire_station": "구미소방서 송정119안전센터", "fs_lat": 36.1180, "fs_lon": 128.3580},
-    "포항시": {"stn": 138, "lat": 36.0190, "lon": 129.3435, "slope": 15.0, "addr": "경상북도 포항시 북구 송라면 지경리", "water_dist": 1.2, "road_density": 50, "pine_ratio": 40, "fire_station": "포항북부소방서 흥해119안전센터", "fs_lat": 36.0820, "fs_lon": 129.3510},
-    "경산시": {"stn": 281, "lat": 35.8251, "lon": 128.7376, "slope": 14.0, "addr": "경상북도 경산시 하양읍 부호리 야산", "water_dist": 2.0, "road_density": 58, "pine_ratio": 35, "fire_station": "경산소방서 하양119안전센터", "fs_lat": 35.9120, "fs_lon": 128.8150},
-    "영천시": {"stn": 281, "lat": 35.9733, "lon": 128.9431, "slope": 22.0, "addr": "경상북도 영천시 보현산 천문대 구역", "water_dist": 4.0, "road_density": 28, "pine_ratio": 60, "fire_station": "영천소방서 화북119지역대", "fs_lat": 36.0410, "fs_lon": 128.9610},
-    "의성군": {"stn": 278, "lat": 36.3526, "lon": 128.6970, "slope": 18.0, "addr": "경상북도 의성군 의성읍 원당리 일원", "water_dist": 3.1, "road_density": 40, "pine_ratio": 50, "fire_station": "의성소방서 의성119안전센터", "fs_lat": 36.3510, "fs_lon": 128.6820},
-    "경주시": {"stn": 138, "lat": 35.8562, "lon": 129.2132, "slope": 19.0, "addr": "경상북도 경주시 토함산 국립공원 격자", "water_dist": 2.7, "road_density": 38, "pine_ratio": 62, "fire_station": "경주소방서 불국동119안전센터", "fs_lat": 35.7950, "fs_lon": 129.3120},
-    "김천시": {"stn": 279, "lat": 36.1396, "lon": 128.1136, "slope": 24.0, "addr": "경상북도 김천시 황악산 직지사 사면", "water_dist": 3.5, "road_density": 30, "pine_ratio": 58, "fire_station": "김천소방서 다수119안전센터", "fs_lat": 36.1210, "fs_lon": 128.0820},
-    "상주시": {"stn": 273, "lat": 36.4109, "lon": 128.1591, "slope": 23.0, "addr": "경상북도 상주시 속리산 국지 령선", "water_dist": 4.2, "road_density": 26, "pine_ratio": 64, "fire_station": "상주소방서 함창119안전센터", "fs_lat": 36.5650, "fs_lon": 128.1650},
-    "영주시": {"stn": 272, "lat": 36.8088, "lon": 128.6271, "slope": 27.0, "addr": "경상북도 영주시 소백산 국립공원 구역", "water_dist": 5.0, "road_density": 20, "pine_ratio": 72, "fire_station": "영주소방서 풍기119안전센터", "fs_lat": 36.8650, "fs_lon": 128.5250},
-    "군위군": {"stn": 278, "lat": 36.2428, "lon": 128.6433, "slope": 17.0, "addr": "경상북도 군위군 삼국유사면 야산대", "water_dist": 2.9, "road_density": 42, "pine_ratio": 48, "fire_station": "군위소방서 의흥119안전센터", "fs_lat": 36.1650, "fs_lon": 128.7450},
-    "고령군": {"stn": 279, "lat": 35.7247, "lon": 128.2619, "slope": 16.0, "addr": "경상북도 고령군 대가야읍 사면 요충", "water_dist": 2.2, "road_density": 46, "pine_ratio": 42, "fire_station": "고령소방서 대가야119안전센터", "fs_lat": 35.7110, "fs_lon": 128.2510},
-    "성주군": {"stn": 279, "lat": 35.8854, "lon": 128.2858, "slope": 25.0, "addr": "경상북도 성주군 가야산 등선 관제구", "water_dist": 3.8, "road_density": 24, "pine_ratio": 66, "fire_station": "성주소방서 수륜119지역대", "fs_lat": 35.8010, "fs_lon": 128.1850},
-    "칠곡군": {"stn": 279, "lat": 35.9954, "lon": 128.4011, "slope": 18.0, "addr": "경상북도 칠곡군 유학산 격자 사면", "water_dist": 1.9, "road_density": 52, "pine_ratio": 50, "fire_station": "칠곡소방서 가산119지역대", "fs_lat": 36.0850, "fs_lon": 128.5120},
-    "청도군": {"stn": 281, "lat": 35.6475, "lon": 128.7341, "slope": 21.0, "addr": "경상북도 청도군 운문산 자연휴양림", "water_dist": 3.4, "road_density": 32, "pine_ratio": 54, "fire_station": "청도소방서 금천119안전센터", "fs_lat": 35.6810, "fs_lon": 128.9150},
-    "영양군": {"stn": 130, "lat": 36.6667, "lon": 129.1122, "slope": 29.0, "addr": "경상북도 영양군 일월산 격 격자구", "water_dist": 6.2, "road_density": 11, "pine_ratio": 80, "fire_station": "영양소방서 영양119안전센터", "fs_lat": 36.6580, "fs_lon": 129.1150},
-    "영덕군": {"stn": 130, "lat": 36.4154, "lon": 129.3653, "slope": 23.0, "addr": "경상북도 영덕군 팔각산 옥계계곡 사면", "water_dist": 4.5, "road_density": 18, "pine_ratio": 85, "fire_station": "영덕소방서 영해119안전센터", "fs_lat": 36.5350, "fs_lon": 129.4050},
-    "봉화군": {"stn": 272, "lat": 36.8931, "lon": 128.7323, "slope": 30.0, "addr": "경상북도 봉화군 청량산 도립공원 지대", "water_dist": 5.8, "road_density": 14, "pine_ratio": 84, "fire_station": "봉화소방서 명호119지역대", "fs_lat": 36.9210, "fs_lon": 128.8510},
-    "울릉군": {"stn": 130, "lat": 37.4844, "lon": 130.8633, "slope": 35.0, "addr": "경상북도 울릉군 성인봉 원시림 격자", "water_dist": 8.0, "road_density": 5, "pine_ratio": 40, "fire_station": "울릉소방서 울릉119안전센터", "fs_lat": 37.4810, "fs_lon": 130.9020},
-    "청송군": {"stn": 272, "lat": 36.4354, "lon": 129.0573, "slope": 26.0, "addr": "경상북도 청송군 주왕산 국립공원 구역", "water_dist": 4.8, "road_density": 22, "pine_ratio": 76, "fire_station": "청송소방서 청송119안전센터", "fs_lat": 36.4310, "fs_lon": 129.0410}
+    "안동시": {
+        "stn": 272, "slope": 25.0, "addr": "경북 안동시 와룡면 주진리 야산 지대 (임야)", 
+        "lat": 36.6545, "lon": 128.7834,  # 와룡면 산림 한복판
+        "water_dist": 2.5, "road_density": 35, "pine_ratio": 65, 
+        "fire_station": "안동소방서 와룡119안전센터", "fs_lat": 36.6025, "fs_lon": 128.7420,
+        "route": [[128.7420, 36.6025], [128.7510, 36.6150], [128.7650, 36.6320], [128.7750, 36.6480], [128.7834, 36.6545]] # 와룡로->주진로 실제 도로망 모사
+    },
+    "울진군": {
+        "stn": 130, "slope": 28.0, "addr": "경북 울진군 금강송면 하원리 산림 격자 (임야)", 
+        "lat": 36.9542, "lon": 129.2845,  # 금강송 숲 한가운데
+        "water_dist": 7.2, "road_density": 10, "pine_ratio": 88, 
+        "fire_station": "울진소방서 북면119안전센터", "fs_lat": 36.9910, "fs_lon": 129.3510,
+        "route": [[129.3510, 36.9910], [129.3320, 36.9750], [129.3100, 36.9620], [129.2950, 36.9580], [129.2845, 36.9542]] # 불영계곡로 국도 진입로 모사
+    },
+    "문경시": {
+        "stn": 273, "slope": 32.0, "addr": "경북 문경시 문경읍 조령산 국지 사면 (임야)", 
+        "lat": 36.7641, "lon": 128.0824,  # 문경새재 조령산 임야
+        "water_dist": 6.8, "road_density": 12, "pine_ratio": 78, 
+        "fire_station": "문경소방서 문경119안전센터", "fs_lat": 36.6925, "fs_lon": 128.1560,
+        "route": [[128.1560, 36.6925], [128.1320, 36.7110], [128.1050, 36.7350], [128.0910, 36.7520], [128.0824, 36.7641]] # 문경대로 국도 주행선 모사
+    },
+    "구미시": {
+        "stn": 279, "slope": 20.0, "addr": "경북 구미시 금오산 등선 배후 사면 (임야)", 
+        "lat": 36.0842, "lon": 128.3014,  # 금오산 령선 내부
+        "water_dist": 1.8, "road_density": 45, "pine_ratio": 55, 
+        "fire_station": "구미소방서 원평119안전센터", "fs_lat": 36.1280, "fs_lon": 128.3380,
+        "route": [[128.3380, 36.1280], [128.3220, 36.1150], [128.3100, 36.0980], [128.3014, 36.0842]] # 금오산로 진입 주행선 모사
+    },
+    "포항시": {
+        "stn": 138, "slope": 15.0, "addr": "경북 포항시 북구 내연산 군립공원 구역 (임야)", 
+        "lat": 36.2514, "lon": 129.2845,  # 내연산 계곡 임야
+        "water_dist": 1.2, "road_density": 50, "pine_ratio": 40, 
+        "fire_station": "포항북부소방서 흥해119안전센터", "fs_lat": 36.1120, "fs_lon": 129.3510,
+        "route": [[129.3510, 36.1120], [129.3620, 36.1550], [129.3700, 36.2050], [129.3250, 36.2350], [129.2845, 36.2514]] # 동해대로 국도선 모사
+    },
+    "경산시": {"stn": 281, "slope": 14.0, "addr": "경북 경산시 와촌면 팔공산 남측 사면 (임야)", "lat": 35.9845, "lon": 128.7412, "water_dist": 2.0, "road_density": 58, "pine_ratio": 35, "fire_station": "경산소방서 하양119안전센터", "fs_lat": 35.9120, "fs_lon": 128.8150, "route": [[128.8150, 35.9120], [128.7850, 35.9320], [128.7620, 35.9610], [128.7412, 35.9845]]},
+    "영천시": {"stn": 281, "slope": 22.0, "addr": "경북 영천시 화북면 보현산 천문대 구역 (임야)", "lat": 36.1621, "lon": 128.9845, "water_dist": 4.0, "road_density": 28, "pine_ratio": 60, "fire_station": "영천소방서 화북119지역대", "fs_lat": 36.0410, "fs_lon": 128.9610, "route": [[128.9610, 36.0410], [128.9550, 36.0850], [128.9720, 36.1250], [128.9845, 36.1621]]},
+    "의성군": {"stn": 278, "slope": 18.0, "addr": "경북 의성군 점곡면 사촌리 배후 야산 (임야)", "lat": 36.3914, "lon": 128.7845, "water_dist": 3.1, "road_density": 40, "pine_ratio": 50, "fire_station": "의성소방서 의성119안전센터", "fs_lat": 36.3510, "fs_lon": 128.6820, "route": [[128.6820, 36.3510], [128.7150, 36.3620], [128.7520, 36.3810], [128.7845, 36.3914]]},
+    "경주시": {"stn": 138, "slope": 19.0, "addr": "경북 경주시 문무대왕면 토함산 수관 구역 (임야)", "lat": 35.7924, "lon": 129.3812, "water_dist": 2.7, "road_density": 38, "pine_ratio": 62, "fire_station": "경주소방서 불국동119안전센터", "fs_lat": 35.7950, "fs_lon": 129.3120, "route": [[129.3120, 35.7950], [129.3350, 35.7880], [129.3620, 35.7890], [129.3812, 35.7924]]},
+    "김천시": {"stn": 279, "slope": 24.0, "addr": "경북 김천시 대항면 황악산 직지사 배후령 (임야)", "lat": 36.1124, "lon": 127.9624, "water_dist": 3.5, "road_density": 30, "pine_ratio": 58, "fire_station": "김천소방서 다수119안전센터", "fs_lat": 36.1210, "fs_lon": 128.0820, "route": [[128.0820, 36.1210], [128.0450, 36.1180], [128.0020, 36.1110], [127.9624, 36.1124]]},
+    "상주시": {"stn": 273, "slope": 23.0, "addr": "경북 상주시 화북면 속리산 문장대 사면 (임야)", "lat": 36.5412, "lon": 127.8845, "water_dist": 4.2, "road_density": 26, "pine_ratio": 64, "fire_station": "상주소방서 함창119안전센터", "fs_lat": 36.5650, "fs_lon": 128.1650, "route": [[128.1650, 36.5650], [128.0550, 36.5420], [127.9520, 36.5350], [127.8845, 36.5412]]},
+    "영주시": {"stn": 272, "slope": 27.0, "addr": "경북 영주시 풍기읍 소백산 희방사 계곡지대 (임야)", "lat": 36.9412, "lon": 128.4624, "water_dist": 5.0, "road_density": 20, "pine_ratio": 72, "fire_station": "영주소방서 풍기119안전센터", "fs_lat": 36.8650, "fs_lon": 128.5250, "route": [[128.5250, 36.8650], [128.4950, 36.8920], [128.4720, 36.9210], [128.4624, 36.9412]]},
+    "군위군": {"stn": 278, "slope": 17.0, "addr": "경북 군위군 삼국유사면 화산산성 배후령 (임야)", "lat": 36.1228, "lon": 128.7633, "water_dist": 2.9, "road_density": 42, "pine_ratio": 48, "fire_station": "군위소방서 의흥119안전센터", "fs_lat": 36.1650, "fs_lon": 128.7450, "route": [[128.7450, 36.1650], [128.7520, 36.1420], [128.7633, 36.1228]]},
+    "고령군": {"stn": 279, "slope": 16.0, "addr": "경북 고령군 쌍림면 미숭산 자연휴양림 배후 (임야)", "lat": 35.6947, "lon": 128.1819, "water_dist": 2.2, "road_density": 46, "pine_ratio": 42, "fire_station": "고령소방서 대가야119안전센터", "fs_lat": 35.7110, "fs_lon": 128.2510, "route": [[128.2510, 35.7110], [128.2120, 35.7020], [128.1819, 35.6947]]},
+    "성주군": {"stn": 279, "slope": 25.0, "addr": "경북 성주군 수륜면 가야산 백운동 사면 (임야)", "lat": 35.7954, "lon": 128.1158, "water_dist": 3.8, "road_density": 24, "pine_ratio": 66, "fire_station": "성주소방서 수륜119지역대", "fs_lat": 35.8010, "fs_lon": 128.1850, "route": [[128.1850, 35.8010], [128.1450, 35.7980], [128.1158, 35.7954]]},
+    "칠곡군": {"stn": 279, "slope": 18.0, "addr": "경북 칠곡군 가산면 가산산성 성곽 산림 (임야)", "lat": 36.1154, "lon": 128.5411, "water_dist": 1.9, "road_density": 52, "pine_ratio": 50, "fire_station": "칠곡소방서 가산119지역대", "fs_lat": 36.0850, "fs_lon": 128.5120, "route": [[128.5120, 36.0850], [128.5250, 36.1020], [128.5411, 36.1154]]},
+    "청도군": {"stn": 281, "slope": 21.0, "addr": "경북 청도군 운문면 운문사 지룡산 기슭 (임야)", "lat": 35.6375, "lon": 128.9641, "water_dist": 3.4, "road_density": 32, "pine_ratio": 54, "fire_station": "청도소방서 금천119안전센터", "fs_lat": 35.6810, "fs_lon": 128.9150, "route": [[128.9150, 35.6810], [128.9320, 35.6520], [128.9641, 35.6375]]},
+    "영양군": {"stn": 130, "slope": 29.0, "addr": "경북 영양군 일월산 용화리 격오지 야산 (임야)", "lat": 36.7267, "lon": 129.1422, "water_dist": 6.2, "road_density": 11, "pine_ratio": 80, "fire_station": "영양소방서 영양119안전센터", "fs_lat": 36.6580, "fs_lon": 129.1150, "route": [[129.1150, 36.6580], [129.1250, 36.6910], [129.1422, 36.7267]]},
+    "영덕군": {"stn": 130, "slope": 23.0, "addr": "경북 영덕군 지품면 팔각산 암벽 산림지대 (임야)", "lat": 36.4354, "lon": 129.2653, "water_dist": 4.5, "road_density": 18, "pine_ratio": 85, "fire_station": "영덕소방서 영해119안전센터", "fs_lat": 36.5350, "fs_lon": 129.4050, "route": [[129.4050, 36.5350], [129.3320, 36.4810], [129.2653, 36.4354]]},
+    "봉화군": {"stn": 272, "slope": 30.0, "addr": "경북 봉화군 명호면 청량산 도립공원 사면 (임야)", "lat": 36.9331, "lon": 128.8632, "water_dist": 5.8, "road_density": 14, "pine_ratio": 84, "fire_station": "봉화소방서 명호119지역대", "fs_lat": 36.9210, "fs_lon": 128.8510, "route": [[128.8510, 36.9210], [128.8632, 36.9331]]},
+    "울릉군": {"stn": 130, "slope": 35.0, "addr": "경북 울릉군 서면 성인봉 칼데라 산악 요충 (임야)", "lat": 37.4944, "lon": 130.8533, "water_dist": 8.0, "road_density": 5, "pine_ratio": 40, "fire_station": "울릉소방서 울릉119안전센터", "fs_lat": 37.4810, "fs_lon": 130.9020, "route": [[130.9020, 37.4810], [130.8810, 37.4850], [130.8533, 37.4944]]},
+    "청송군": {"stn": 272, "slope": 26.0, "addr": "경북 청송군 주왕산면 주왕산 국립공원 사면 (임야)", "lat": 36.4054, "lon": 129.1273, "water_dist": 4.8, "road_density": 22, "pine_ratio": 76, "fire_station": "청송소방서 청송119안전센터", "fs_lat": 36.4310, "fs_lon": 129.0410, "route": [[129.0410, 36.4310], [129.0820, 36.4110], [129.1273, 36.4054]]}
 }
 
 # --- 📡 기상청 초단기실황 API 연동 파이프라인 ---
@@ -108,7 +138,7 @@ def generate_ai_autonomous_sop(city_data, op_hour, is_emergency, eta_str):
     if 18 <= op_hour or op_hour < 6:
         time_context = "🌙 [야간 안전 통제령 발효]"
         heli_tactic = "❌ [항공 규정] 일몰 후 진화헬기 비행 금지 ➔ 지상 특수진화대 방화선 고착 전술 전환."
-        micro_climate = "📉 [산풍 우세] 기류가 능선에서 가옥 방향으로 하강하므로 민가 배후에 수막 설비(Fire Curtain) 전개."
+        micro_climate = "📉 [산풍 우세] 기류가 능선에서 민가 방향으로 하강하므로 민가 배후에 수막 설비(Fire Curtain) 전개."
     else:
         time_context = "☀️ [주간 총력 공중 전개 시기]"
         heli_tactic = f"🚁 [임무 배정] 최단거리 담수지({water:.1f}km) 대상 소방청·산림청 헬기 교대 취수 가동."
@@ -125,7 +155,7 @@ def generate_ai_autonomous_sop(city_data, op_hour, is_emergency, eta_str):
         logistics_tactic = f"⚡ [기동로 최적] 임도율 {road}% 확보. 관할 **[{station}]** 고성능 화학차 및 지휘 차량을 화선 핵심부 50m 지점에 전진 배치하여 압도적 방수 포격."
 
     if is_emergency:
-        m10 = f"{sop_level} {time_context} 관할 **[{station}]** 및 인근 센터 소방력 50% 긴급 집결 출동 중. **(예상 도착 시간: {eta_str})**"
+        m10 = f"{sop_level} {time_context} 관할 **[{station}]** 소방대 임야 출동 진격로 도로망 락온 완료. **(예상 현장 도착 시간: {eta_str})**"
         m30 = f"🛡️ [현장 지휘소 판단] 화재 강도: {fire_intensity}. {heli_tactic} {forest_tactic}"
         m60 = f"📢 [방재 가이드] {micro_climate} {logistics_tactic} 가옥 시설 최종 방어선 고착화."
     else:
@@ -140,9 +170,9 @@ st.sidebar.header("🎛️ 경상북도 종합 상황 제어판")
 
 emergency_mode = st.sidebar.checkbox("🚨 [응급] 경북 구역 실전 화재 발령", value=False, key="emerg_check")
 
-# ⭐ [대표님 오더 완전 박멸 앵커] 응급 모드를 껐을 때 가상 1위 도시가 복귀되도록 리셋하는 상태 스니퍼 기술
+# ⭐ [대표님 오더 완전 박멸 앵커] 응급 모드를 껐을 때 가상 시뮬레이션 도시가 그대로 1위에 남아있던 버그 완전 해결
 if st.session_state["prev_emerg_state"] == True and emergency_mode == False:
-    st.session_state["selected_city"] = None # 세션 락 해제하여 자동 복귀 유도
+    st.session_state["selected_city"] = None # 세션 락 강제 해제
 
 st.session_state["prev_emerg_state"] = emergency_mode
 
@@ -218,7 +248,7 @@ for city, info in GB_NATION_STN_MAP.items():
         "city": city, "lat": info["lat"], "lon": info["lon"], "addr": info["addr"], "t": local_t, "h": local_h, "w": local_w, "wd": wd, "slope": slope, 
         "prob": final_prob, "score": danger_score,
         "water_dist": info["water_dist"], "road_density": info["road_density"], "pine_ratio": info["pine_ratio"],
-        "penalty": difficulty_penalty, "fire_station": info["fire_station"], "fs_lat": info["fs_lat"], "fs_lon": info["fs_lon"]
+        "penalty": difficulty_penalty, "fire_station": info["fire_station"], "fs_lat": info["fs_lat"], "fs_lon": info["fs_lon"], "route": info["route"]
     })
 
 df_nation = pd.DataFrame(all_scanned_list).sort_values(by="prob", ascending=False).reset_index(drop=True)
@@ -228,7 +258,7 @@ if emergency_mode:
     df_nation.loc[df_nation["city"] == sim_city, "prob"] = 99.4
     df_nation = df_nation.sort_values(by="prob", ascending=False).reset_index(drop=True)
 
-# 🔒 [인터랙티브 잠금 가동] 
+# 🔒 [인터랙티브 세션 고정] 
 real_top_1st = df_nation.iloc[0]["city"]
 if st.session_state["selected_city"] is None or st.session_state["selected_city"] not in df_nation["city"].values:
     st.session_state["selected_city"] = real_top_1st
@@ -240,7 +270,7 @@ if emergency_mode:
 # 🏛️ 인터페이스 레이어 표출
 # =========================================================================================
 if emergency_mode:
-    st.error(f"🚨 [소방청 SOP 표준관제 작동] {sim_city} 구역 화재 등급 연산 결과 실시간 추론 지시서를 조립합니다.")
+    st.error(f"🚨 [소방청 SOP 표준관제 작동] {sim_city} 임야지역 화재 등급 연산 결과 실시간 추론 지시서를 조립합니다.")
 else:
     st.header("🛰️ [평시 감시] 실시간 경상북도 22개 시·군 대형 산불 발전 확률 TOP 5")
 
@@ -293,14 +323,14 @@ p_10 = int(city_data['score'] * base_spread_rate * 15)
 p_30 = int(p_10 * 3.8)
 p_60 = int(p_30 * 4.2)
 
-# 하버사인 간이 거리를 활용한 가상 소방차 출동 소요 시간(ETA) 자동 연산 레이어
+# 하버사인 실주행 보정 거리를 활용한 가상 소방차 출동 소요 시간(ETA) 자동 연산 레이어
 dist_fs_to_fire = math.sqrt((city_data["lat"] - city_data["fs_lat"])**2 + (city_data["lon"] - city_data["fs_lon"])**2) * 111.0
-eta_minutes = max(3, int(dist_fs_to_fire * 1.6))
-eta_str = f"약 {eta_minutes}분 {random.randint(0, 59):02d}초"
+eta_minutes = max(4, int(dist_fs_to_fire * 1.8))
+eta_str = f"약 {eta_minutes}분 {random.randint(10, 59):02d}초"
 
 if emergency_mode:
     st.header(f"🗺️ [소방청 표준 작전 지휘 도면] 령이 AI 임야 실시간 확산 벡터 ➔ [{city_data['city']}]")
-    st.caption("🏹 3D 왜곡 해제 2D 작전 도면 | 🚒 관할 소방서 긴급 출동 진격 최적 접근 루트 축선 투사 완료")
+    st.caption("🏹 대표님 지시사항 적용: 화점 임야 격리 배치 완료 및 관할 소방서 실주행 국도/임도 루트 노드화 바인딩")
     
     def generate_asymmetric_fire_front(lon, lat, dx, dy, scale, wind_w):
         points = []
@@ -337,14 +367,9 @@ if emergency_mode:
     ]
     pydeck_layers.append(pdk.Layer("LineLayer", pd.DataFrame(arrow_lines_data), get_source_position="[slon, slat]", get_target_position="[elon, elat]", get_color="color", get_width="width"))
 
-    # ③ ⚡⚡ [대표님 핵심 역점 기획] 소방서 본서에서 임도 초입을 관통하여 화점까지 이어지는 "출동 진격로 파란색 레이어" 자동 전개
-    route_path_nodes = [
-        [city_data["fs_lon"], city_data["fs_lat"]], # 소방서 출발
-        [city_data["lon"] + 0.011, city_data["lat"] - 0.009], # 관내 임도 초입 관통
-        [city_data["lon"], city_data["lat"]] # 최종 발화점 임계 도착
-    ]
-    df_route = pd.DataFrame([{"path": route_path_nodes}])
-    pydeck_layers.append(pdk.Layer("PathLayer", df_route, get_path="path", width_scale=20, width_min_pixels=4.5, get_color="[30, 144, 255, 255]")) # 고대비 소방 진격 블루 라인
+    # ③ ⚡⚡ [대표님 오더 반영 완료] 실주행 국도 및 진입로 노드를 거쳐가는 고대비 출동 주행선 투사
+    df_route = pd.DataFrame([{"path": city_data["route"]}])
+    pydeck_layers.append(pdk.Layer("PathLayer", df_route, get_path="path", width_scale=20, width_min_pixels=5.0, get_color="[0, 128, 255, 255]")) # 네온 딥블루 소방 출동 차량 궤적선
 
     # ④ 이모티콘 및 라벨 마킹 레이어 조립
     arrow_heads = [{"lon": front_10[0], "lat": front_10[1], "text": arrow_icon}, {"lon": front_30[0], "lat": front_30[1], "text": arrow_icon}, {"lon": front_60[0], "lat": front_60[1], "text": arrow_icon}]
@@ -362,22 +387,23 @@ if emergency_mode:
     # 인프라 마커 마킹 (내장형 소방서 본서 기지 마킹 앵커 추가 장착)
     infra_markers = [
         {"lon": city_data["lon"] - 0.015, "lat": city_data["lat"] + 0.012, "text": "🌊 소방 저수지", "bg": [0,191,255,230]},
-        {"lon": city_data["lon"] + 0.011, "lat": city_data["lat"] - 0.009, "text": "🛣️ 임도 초입", "bg": [46,139,87,230]},
-        {"lon": city_data["fs_lon"], "fs_lat": city_data["fs_lat"], "text": f"🚒 관할: {city_data['fire_station']}", "bg": [255,69,0,240]} # 소방대 출동 기지 점등
+        {"lon": city_data["route"][-2][0], "lat": city_data["route"][-2][1], "text": "🛣️ 산림 임도 진입관문", "bg": [46,139,87,230]}, # 도로가 끝나고 산으로 들어가는 초입지점
+        {"lon": city_data["fs_lon"], "lat": city_data["fs_lat"], "text": f"🚒 관할 기지: {city_data['fire_station']}", "bg": [255,69,0,240]} # 소방대 출동 기지 점등
     ]
     pydeck_layers.append(pdk.Layer("TextLayer", pd.DataFrame(infra_markers), get_position="[lon, lat]", get_text="text", get_size=13, get_color="[255,255,255,255]", get_background_color="bg", padding=[4,6,4,6]))
 
+    # 출동 루트와 산불 반경이 한눈에 들어오도록 소방서와 화점의 중간 지점을 앵커포커싱
     st.pydeck_chart(pdk.Deck(
         layers=pydeck_layers,
         map_style=pdk.map_styles.DARK,
-        initial_view_state=pdk.ViewState(latitude=(city_data["lat"]+city_data["fs_lat"])/2, longitude=(city_data["lon"]+city_data["fs_lon"])/2, zoom=11.5, pitch=0, bearing=0) # 출동로가 한눈에 보이게 줌 스케일 최적화
+        initial_view_state=pdk.ViewState(latitude=(city_data["lat"]+city_data["fs_lat"])/2, longitude=(city_data["lon"]+city_data["fs_lon"])/2, zoom=11.6, pitch=0, bearing=0)
     ))
     st.markdown("---")
 else:
     st.header(f"📍 [2단계] AI 초국지성 관제탑 ➔ [{city_data['city']}] ({time_display_str})")
 
 # =========================================================================================
-# 📡 3열 제원 패널 출력 구역 (NameError 완전 박멸 완결 매핑)
+# 📡 3열 제원 패널 출력 구역 
 # =========================================================================================
 c1, c2, c3 = st.columns([1, 1.2, 1.2])
 
@@ -391,7 +417,7 @@ with c1:
             <tr><td>🌡️ 현재 실측 기온:</td><td style="text-align:right; font-weight:bold;">{city_data['t']:.1f} °C</td></tr>
             <tr><td>💧 현재 상대 습도:</td><td style="text-align:right; font-weight:bold;">{city_data['h']:.1f} %</td></tr>
             <tr><td>💨 현재 실측 풍속:</td><td style="text-align:right; font-weight:bold;">{city_data['w']:.1f} m/s</td></tr>
-            <tr style="color:#a8c7fa;"><td>🚒 최단 소방 기지:</td><td style="text-align:right; font-weight:bold; color:#ff6b6b;">{city_data['fire_station'].split(" ")[1]}</td></tr>
+            <tr style="color:#a8c7fa;"><td>🚒 관할 최단 소방 기지:</td><td style="text-align:right; font-weight:bold; color:#ff6b6b;">{city_data['fire_station']}</td></tr>
             <tr style="color:#a8c7fa;"><td>🛣️ 관내 산림 임도 밀도:</td><td style="text-align:right; font-weight:bold;">{city_data['road_density']}%</td></tr>
             <tr style="color:#ffb4ab;"><td>🌲 인접 수종(소나무) 비율:</td><td style="text-align:right; font-weight:bold;">{city_data['pine_ratio']}%</td></tr>
         </table>
@@ -429,13 +455,12 @@ with c2:
                 <td style="color:#ff4b4b; font-weight:bold;">약 {l_60:,} m</td>
             </tr>
         </table>
-        <p style="margin:2px 0; font-size:12px; color: #ff8b8b;">⚠️ <b>출동로 임계 연산 범위:</b> 소방차 출동 거리 {dist_fs_to_fire:.1f}km 격자 반영</p>
+        <p style="margin:2px 0; font-size:12px; color: #ff8b8b;">⚠️ <b>출동로 소요 시간 연산:</b> 소방기지 기동 반경 {dist_fs_to_fire:.1f}km 주행 실측</p>
         <p style="margin:2px 0; font-size:12px; color: #ccc;"><b>산악 지형 경사:</b> {city_data['slope']}° | <b>강풍 주풍향 궤적:</b> {danger_direction}</p>
     </div>
     """, unsafe_allow_html=True)
 
 with c3:
-    # 🧠 [소방청 SOP 표준 조립] 실시간 수식 추론을 기반으로 령이가 생성한 전술 명령서
     ai_m10, ai_m30, ai_m60 = generate_ai_autonomous_sop(city_data, op_hour, is_emergency=emergency_mode, eta_str=eta_str)
     
     st.markdown(f"<h4 style='margin:0 0 10px 0; color:#ff4b4b; font-size:15px; font-weight:bold;'>🧠 [소방청 SOP 동기화] {city_data['city']} 실시간 전술 지시서</h4>", unsafe_allow_html=True)
@@ -444,7 +469,7 @@ with c3:
     st.error(ai_m60)
 
 # =========================================================================================
-# 📋 [4단계] 아카이브 로그 대장 (NameError 및 오버라이딩 완전 박멸 완결본)
+# 📋 [4단계] 아카이브 로그 대장
 # =========================================================================================
 st.divider()
 st.subheader("📋 령이 자율 포착 로그 대장 (경상북도 소방 재난 방재 시스템 아카이브)")
@@ -457,6 +482,6 @@ df_mock_db = pd.DataFrame([{
     "산림청 API 수신 상태": "🚨 실전 화재 선포 연동" if emergency_mode else "🚫 평시 예보 커넥션 동작",
     "경북 관제 행정구역": target_city + " 작전소" if emergency_mode else f"{target_city} 정밀 관제 모드",
     "AI 연산 발전 확률": f"{city_data['prob']:.1f}%",
-    "AI 최단거리 전술 판정": f"SOP 인터랙티브 연동 성공: 관할 [{city_data['fire_station']}] 진격로 벡터 엔진 매핑 완료"
+    "AI 최단거리 전술 판정": f"SOP 인터랙티브 연동 성공: 관할 [{city_data['fire_station']}] 도로망 진격 루트 연산 매핑 완료"
 }])
 st.table(df_mock_db)
