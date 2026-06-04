@@ -23,7 +23,7 @@ if "prev_active_mode" not in st.session_state:
     st.session_state["prev_active_mode"] = False
 
 st.title("🚨 경상북도 실시간 산불 소방 작전 지휘 플랫폼 '령이'")
-st.markdown(f"**Core Engine v63.0:** 🔒 평시 지도 숨김 유지 ➔ 📊 2단계 자율 예측 시뮬레이션 보드 평시 상시 락오프(실시간 연산) 엔진")
+st.markdown(f"**Core Engine v64.0:** 🔒 불필요한 체크박스 전면 제거 ➔ 🧮 AI 연산 위험도 75% 돌파 시 [실전 화재 체제] 즉시 자율 전환 엔진")
 st.divider()
 
 # --- 🛰️ 경북 22개 시·군 로컬 마스터 풀 ---
@@ -129,15 +129,13 @@ def generate_ai_autonomous_sop(city_data, op_hour, is_emergency, eta_str):
     else:
         m10 = f"{sop_level} 관내 평시 예찰 및 소방 상시 무전 개방령."
         m30 = f"🔸 [가상 연산 알림] 우측 시뮬레이션 보드는 실시간 기상 가중치를 바탕으로 상시 락오프 가동 중입니다."
-        m60 = f"🔹 [시스템 알림] 현재 평시 관제 모드입니다. 기상 시뮬레이션 또는 실전 화재 발령 시 하단에 2단계 전술 지도가 출현합니다."
+        m60 = f"🔹 [시스템 알림] 현재 평시 관제 모드입니다. 기상 악화 시뮬레이션을 가동하여 임계 확률 돌파 시 실전 지도가 팝업됩니다."
 
     return m10, m30, m60
 
-# --- 🎛️ 사이드바 시뮬레이터 종합 통제 제어판 ---
+# --- 🎛️ 사이드바 시뮬레이터 종합 통제 제어판 (중복 체크박스 완벽 삭제) ---
 st.sidebar.header("🎛️ 경상북도 종합 상황 제어판")
 
-emergency_mode = st.sidebar.checkbox("🚨 [응급] 경북 구역 실전 화재 발령", value=False, key="emerg_check")
-st.sidebar.markdown("---")
 st.sidebar.subheader("⏰ 관제 작전 시각 설정")
 use_manual_time = st.sidebar.checkbox("⏰ 수동 작전 시각 시뮬레이션 가동", value=False)
 
@@ -155,25 +153,14 @@ sim_mode = st.sidebar.checkbox("🌡️ 특정 시·군 기상 악화 시뮬레�
 sim_city = "의성군"
 sim_t, sim_h, sim_w = 15.4, 40.0, 25.0
 
-if sim_mode or emergency_mode:
+if sim_mode:
     sim_city = st.sidebar.selectbox("대상 시·군 선택", list(GB_NATION_STN_MAP.keys()), index=list(GB_NATION_STN_MAP.keys()).index("의성군") if "의성군" in GB_NATION_STN_MAP else 0)
     sim_t = st.sidebar.slider("가상 온도 (°C)", 10.0, 45.0, value=15.4)
     sim_h = st.sidebar.slider("가상 상대습도 (%)", 0.0, 100.0, value=40.0)
     sim_w = st.sidebar.slider("가상 풍속 (m/s)", 0.0, 30.0, value=25.0)
 
-current_mode_state = (sim_mode or emergency_mode)
-
-# 🔄 [원격 제어권 오버라이딩 오더 고정]
-if current_mode_state:
-    st.session_state["selected_city"] = sim_city
-    st.session_state["prev_active_mode"] = True
-else:
-    if st.session_state["prev_active_mode"] == True:
-        st.session_state["selected_city"] = None
-        st.session_state["prev_active_mode"] = False
-
 # =========================================================================================
-# 🔄 연산 루프 동작
+# 🔄 1차 스캔 및 실시간 연산 프로토콜
 # =========================================================================================
 if "history_probs" not in st.session_state:
     st.session_state["history_probs"] = {}
@@ -183,7 +170,7 @@ for city, info in GB_NATION_STN_MAP.items():
     t, h, w, wd = fetch_kma_live_weather(info["stn"])
     slope = info["slope"]
     
-    if (sim_mode or emergency_mode) and city == sim_city:
+    if sim_mode and city == sim_city:
         t, h, w = sim_t, sim_h, sim_w
 
     seed_factor = (info["stn"] % 7) - 3
@@ -201,7 +188,7 @@ for city, info in GB_NATION_STN_MAP.items():
 
     if city in st.session_state["history_probs"]:
         prev_prob = st.session_state["history_probs"][city]
-        weight = 0.0 if (sim_mode or emergency_mode) else 0.85 
+        weight = 0.0 if sim_mode else 0.85 
         final_prob = (prev_prob * weight) + (raw_prob * (1.0 - weight))
     else:
         final_prob = raw_prob
@@ -218,9 +205,29 @@ for city, info in GB_NATION_STN_MAP.items():
         "penalty": difficulty_penalty, "fire_station": info["fire_station"], "fs_lat": info["fs_lat"], "fs_lon": info["fs_lon"], "route": info["route"]
     })
 
+# 🎯 [대표님 오더 전폭 반영: AI 계산 확률 75% 기준으로 실전 체제 자동 스위칭 인터록]
+PROB_THRESHOLD = 75.0
+trigger_emergency_by_prob = False
+
+# 시뮬레이션 대상 도시의 자율 연산된 확률 추적
+target_sim_data = [x for x in all_scanned_list if x["city"] == sim_city]
+if target_sim_data and sim_mode:
+    if target_sim_data[0]["prob"] >= PROB_THRESHOLD:
+        trigger_emergency_by_prob = True # 75% 넘기면 자동으로 실전 화재 선포 체제 락인!
+
+# 🔄 [원격 제어권 오버라이딩 강제 고정]
+if trigger_emergency_by_prob:
+    st.session_state["selected_city"] = sim_city
+    st.session_state["prev_active_mode"] = True
+else:
+    if st.session_state["prev_active_mode"] == True:
+        st.session_state["selected_city"] = None
+        st.session_state["prev_active_mode"] = False
+
+# 랭킹 정렬 리프레시
 df_nation = pd.DataFrame(all_scanned_list).sort_values(by="prob", ascending=False).reset_index(drop=True)
 
-if emergency_mode:
+if trigger_emergency_by_prob:
     df_nation = pd.DataFrame(all_scanned_list)
     df_nation.loc[df_nation["city"] == sim_city, "prob"] = 99.4
     df_nation = df_nation.sort_values(by="prob", ascending=False).reset_index(drop=True)
@@ -231,24 +238,23 @@ if st.session_state["selected_city"] is None or st.session_state["selected_city"
 target_city = st.session_state["selected_city"]
 city_data = df_nation[df_nation["city"] == target_city].iloc[0]
 
-# --- UI 상단 상태 메시지 ---
-if emergency_mode:
-    st.error(f"🚨 [소방청 SOP 최고단계 동원] {sim_city} 구역 임야 화재 발생! 2단계 전술 작전 지휘 도면이 강제 언락되었습니다.")
+# --- UI 상단 상태 알림 메시지 교정 ---
+if trigger_emergency_by_prob:
+    st.error(f"🚨 [AI 자율 실전 화재 선포] {sim_city} 산불 위험률 {city_data['prob']:.1f}%로 임계선 돌파! 2단계 평면 전술 도면이 자동 전개되었습니다.")
 elif sim_mode:
-    st.warning(f"⚠️ [기상 변수 추론 가동] {sim_city} 초고강도 풍속 감지 ➔ 실시간 전술 모델링 화면 팝업")
+    st.warning(f"⚠️ [기상 변수 추론 예찰] {sim_city} 시뮬레이션 중 (현재 위험도 안정권: {city_data['prob']:.1f}%)")
 else:
-    st.success(f"🟢 [평시 라이브 예찰] 선택된 타겟구역: [{target_city}] ➔ 실시간 기상/지형 맞춤형 확산 예측 시뮬레이션 가동 중")
+    st.success(f"🟢 [평시 라이브 예찰] 선택된 관제구역: [{target_city}] ➔ 기상/지형 맞춤형 대형 산불 시뮬레이션 상시 가동 중")
 
 # TOP 5 랭킹 카드 표출
-PROB_THRESHOLD = 75.0
 cols = st.columns(5)
 for idx, row in df_nation.iterrows():
     if idx >= 5: break
     with cols[idx]:
-        if (sim_mode or emergency_mode) and row["city"] == sim_city:
+        if trigger_emergency_by_prob and row["city"] == sim_city:
             border_style = "border: 3px dashed #ff4b4b; background-color: #3b0000; border-radius: 8px; padding: 15px; text-align: center;"
             prob_color = "#ff4b4b"
-            title_prefix = "🔥 [발령] "
+            title_prefix = "🔥 [실전] "
         elif row["prob"] >= PROB_THRESHOLD:
             border_style = "border: 2px solid #ff4b4b; background-color: #2b1111; border-radius: 8px; padding: 15px; text-align: center;"
             prob_color = "#ff4b4b"
@@ -259,8 +265,8 @@ for idx, row in df_nation.iterrows():
             title_prefix = f"{idx+1}위. "
             
         if row["city"] == target_city:
-            if current_mode_state:
-                border_style = border_style.replace("border: 2px solid #ff4b4b", "border: 3px dashed #ffff00")
+            if trigger_emergency_by_prob:
+                border_style = border_style.replace("border: 3px dashed #ff4b4b", "border: 3px dashed #ffff00")
             else:
                 border_style = "border: 2px dashed #1a73e8; background-color: #111520; border-radius: 8px; padding: 15px; text-align: center;"
 
@@ -272,13 +278,11 @@ for idx, row in df_nation.iterrows():
         </div>
         """, unsafe_allow_html=True)
         
-        if st.button(f"🔍 {row['city']} 분석 관제", key=f"btn_{row['city']}", use_container_width=True, disabled=current_mode_state):
+        if st.button(f"🔍 {row['city']} 분석 관제", key=f"btn_{row['city']}", use_container_width=True, disabled=trigger_emergency_by_prob):
             st.session_state["selected_city"] = row["city"]
             st.rerun()
 
-# =========================================================================================
-# 🎯 수치 실시간 연산부 (평시/비상 공통 수학적 파이프라인 구조 - 락오프)
-# =========================================================================================
+# --- 수치 계산 파이프라인 ---
 wd_text, danger_direction, dx, dy, arrow_icon = get_wind_direction_text(city_data["wd"])
 base_spread_rate = (city_data['w'] * 1.5) * (1.0 + (city_data['slope'] / 35.0)) * (1.0 + city_data['penalty'])
 p_10 = int(city_data['score'] * base_spread_rate * 15)
@@ -289,9 +293,9 @@ eta_minutes = max(4, int(dist_fs_to_fire * 1.8))
 eta_str = f"약 {eta_minutes}분 {random.randint(10, 59):02d}초"
 
 # =========================================================================================
-# 🗺️ [2단계 전술 지도 레이아웃 - 비상 시에만 활성화]
+# 🗺️ [2단계 전술 지도 레이아웃 - 75% 돌파 자율 실전 체제 시에만 팝업 가동]
 # =========================================================================================
-if current_mode_state:
+if trigger_emergency_by_prob:
     st.divider()
     st.header(f"🗺️ [2단계 실전 전술 지휘 도면] 령이 AI 임야 분석 벡터 ➔ [{city_data['city']}]")
     
@@ -354,7 +358,7 @@ if current_mode_state:
         initial_view_state=pdk.ViewState(latitude=(city_data["lat"]+city_data["fs_lat"])/2, longitude=(city_data["lon"]+city_data["fs_lon"])/2, zoom=11.6, pitch=0, bearing=0)
     ))
 
-# --- 📡 3열 제원 패널 (지도가 꺼져도 제원 보드는 상시 락오프 활성화) ---
+# --- 📡 3열 제원 패널 (락오프) ---
 st.markdown("---")
 c1, c2, c3 = st.columns([1, 1.2, 1.2])
 
@@ -376,13 +380,11 @@ with c1:
     """, unsafe_allow_html=True)
 
 with c2:
-    # 🎯 대표님의 지침 반영: 평시에도 수치 연산 무조건 락오프 표출!
-    status_color = "#ff4b4b" if current_mode_state else "#66bb6a"
-    calc_status_text = f"<span style='color:#ff4b4b; font-weight:bold;'>⚠️ 령이 실전 확산 모델링 연산 중</span>" if current_mode_state else f"<span style='color:#66bb6a; font-weight:bold;'>🟢 평시 라이브 예측 연산 중 (락오프)</span>"
+    status_color = "#ff4b4b" if trigger_emergency_by_prob else "#66bb6a"
+    calc_status_text = f"<span style='color:#ff4b4b; font-weight:bold;'>⚠️ 령이 실전 확산 모델링 연산 중</span>" if trigger_emergency_by_prob else f"<span style='color:#66bb6a; font-weight:bold;'>🟢 평시 라이브 예측 연산 중 (락오프)</span>"
     row1_area = f"약 {p_10:,} 평"
     row2_area = f"약 {p_30:,} 평"
     row3_area = f"약 {p_60:,} 평"
-    direction_display = danger_direction
 
     st.markdown(f"""
     <div style="background-color: #1c1d24; padding: 18px; border-radius: 8px; border-left: 5px solid {status_color}; min-height: 330px;">
@@ -402,7 +404,7 @@ with c2:
             <tr style="border-bottom:1px solid #333;">
                 <td style="color:#ffaa00; font-weight:bold;">발화 30분 뒤</td>
                 <td style="color:#ffaa00; font-weight:bold;">{row2_area}</td>
-                <td style="color:#ffaa00; font-weight:bold;">{direction_display}</td>
+                <td style="color:#ffaa00; font-weight:bold;">{danger_direction}</td>
             </tr>
             <tr style="border-bottom:1px solid #333;">
                 <td style="color:#ff4b4b; font-weight:bold;">발화 60분 뒤</td>
@@ -415,13 +417,13 @@ with c2:
     """, unsafe_allow_html=True)
 
 with c3:
-    ai_m10, ai_m30, ai_m60 = generate_ai_autonomous_sop(city_data, op_hour, is_emergency=emergency_mode, eta_str=eta_str)
+    ai_m10, ai_m30, ai_m60 = generate_ai_autonomous_sop(city_data, op_hour, is_emergency=trigger_emergency_by_prob, eta_str=eta_str)
     st.markdown(f"<h4 style='margin:0 0 10px 0; color:#ff4b4b; font-size:15px; font-weight:bold;'>🧠 [소방청 SOP 동기화] {city_data['city']} 실시간 전술 지시서</h4>", unsafe_allow_html=True)
     st.info(ai_m10)
     st.warning(ai_m30)
     st.error(ai_m60)
 
-# --- 🧠 [RAG 연산부 - 시공간 시간대 가중치 초정밀 보정본] ---
+# --- 🧠 [RAG 연산부] ---
 st.markdown("---")
 with st.spinner("🧠 령이 대뇌 피질: 시공간 통계 탐색 중..."):
     brain_dataset = fetch_forest_fire_stats_brain()
@@ -429,21 +431,17 @@ with st.spinner("🧠 령이 대뇌 피질: 시공간 통계 탐색 중..."):
     
     best_match, min_distance = None, float('inf')
     for data in brain_dataset:
-        # 시간대(Hour) 매칭의 중요도를 극대화하기 위해 시간 페널티 가중치를 1.5 ➔ 8.0으로 대폭 상향
         distance = math.sqrt(
-            ((current_t - data["t"]) * 1.0) ** 2 + 
-            ((current_h - data["h"]) * 1.0) ** 2 + 
-            ((current_w - data["w"]) * 2.0) ** 2 + 
-            ((current_hr - data["hour"]) * 8.0) ** 2   # 💡 시간 매칭 왜곡 방지선
+            ((current_t - data["t"]) * 1.0) ** 2 + ((current_h - data["h"]) * 1.2) ** 2 + 
+            ((current_w - data["w"]) * 2.5) ** 2 + ((current_hr - data["hour"]) * 8.0) ** 2 # 💡 14시 주간 시간대 초고가중치 락온 유지
         )
         if distance < min_distance:
             min_distance = distance
             best_match = data
 
-    # 싱크로율 계산 로직 보정 (시간대가 맞지 않으면 싱크로율이 자연스럽게 드랍되도록 유도)
-    similarity_score = max(50.0, min(99.9, 100.0 - (min_distance * 1.1)))
-    box_border = "border: 2px solid #ff4b4b; background-color: #2b1111;" if current_mode_state else "border: 1px solid #1a73e8; background-color: #141824;"
-    title_color = "#ff4b4b" if current_mode_state else "#1a73e8"
+    similarity_score = max(50.0, min(99.9, 100.0 - (min_distance * 1.3)))
+    box_border = "border: 2px solid #ff4b4b; background-color: #2b1111;" if trigger_emergency_by_prob else "border: 1px solid #1a73e8; background-color: #141824;"
+    title_color = "#ff4b4b" if trigger_emergency_by_prob else "#1a73e8"
     rag_conclusion_text = best_match['sol']
 
 st.markdown(f"""
@@ -461,9 +459,9 @@ st.divider()
 st.subheader("📋 령이 자율 포착 로그 대장 (경상북도 소방 재난 방재 시스템 아카이브)")
 df_mock_db = pd.DataFrame([{
     "령이 실시간 감지 시각": now_kst.strftime("%Y-%m-%d %H:%M:%S"),
-    "산림청 API 수신 상태": "🚨 실전 화재 선포 연동" if emergency_mode else ("⚠️ 기상 악화 시뮬레이션 주입" if sim_mode else "🟢 라이브 OpenAPI 무결성 동기화"),
-    "경북 관제 행정구역": target_city + " 작전소" if emergency_mode else f"{target_city} 상시 예찰 지대",
+    "산림청 API 수신 상태": "🚨 실전 대형산불 임계값 돌파 자율 선포" if trigger_emergency_by_prob else "🟢 라이브 OpenAPI 무결성 동기화 (평시 예찰)",
+    "경북 관제 행정구역": target_city + " 작전소" if trigger_emergency_by_prob else f"{target_city} 상시 예찰 지대",
     "AI 연산 발전 확률": f"{city_data['prob']:.1f}%",
-    "AI 최단거리 전술 판정": "지도 팝업 및 전술 결론 강제 해제" if current_mode_state else "평시 모드 (지도 잠금 / 시뮬레이션 보드 락오프 가동)"
+    "AI 최단거리 전술 판정": "위험률 75% 돌파 ➔ 실전 관제 도면 긴급 해제 성공" if trigger_emergency_by_prob else "평시 예찰 모드 (지도 잠금 / 시뮬레이션 보드 락오프 가동)"
 }])
 st.table(df_mock_db)
