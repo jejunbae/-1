@@ -438,13 +438,12 @@ with st.spinner("🧠 령이 대뇌 피질: 시공간 통계 탐색 중..."):
 st.markdown(f"""
 <div style="{box_border} padding: 20px; border-radius: 8px;">
     <h3 style="margin: 0 0 10px 0; color: {title_color}; font-weight: bold;">🧠 령이 AI 산림청 OpenAPI 4차원 시공간 추론 결론</h3>
-    <h4 style="margin: 0 0 8px 0; color: white;">📌 자율 기억 매칭: {best_match['case'] if current_mode_state else '평시 라이브 API 파이프라인 동기화 상태'} (시공간 기상 싱크로율: <span style='color:#ffff00; font-size:18px;'>{similarity_score:.1f if current_mode_state else 100:.1f}%</span>)</h4>
+    <h4 style="margin: 0 0 8px 0; color: white;">📌 자율 기억 매칭: {best_match['case'] if current_mode_state else '평시 라이브 API 파이프라인 동기화 상태'} (시공간 기상 싱크로율: <span style='color:#ffff00; font-size:18px;'>{similarity_score if current_mode_state else 100.0:.1f}%</span>)</h4>
     <p style="margin: 0 0 15px 0; color: #ddd; font-size: 14px; line-height: 1.6;"><b>과거 데이터 아카이브 맥락 분석:</b><br>{best_match['desc'] if current_mode_state else '현재 도내 전역 기상 인덱스가 안정권에 있으므로, 시스템 부하 최소화 및 지휘관 시선 집중을 위해 정밀 지도 레이아웃을 폐쇄 보호합니다.'}</p>
     <hr style="border: 0.5px solid #444; margin: 10px 0;">
     <p style="margin: 0; color: #b9f6ca; font-size: 15px; line-height: 1.6;">{rag_conclusion_text}</p>
 </div>
 """, unsafe_allow_html=True)
-
 # --- 아카이브 로그 대장 ---
 st.divider()
 st.subheader("📋 령이 자율 포착 로그 대장 (경상북도 소방 재난 방재 시스템 아카이브)")
