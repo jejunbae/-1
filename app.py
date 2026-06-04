@@ -421,7 +421,7 @@ with c3:
     st.warning(ai_m30)
     st.error(ai_m60)
 
-# --- 🧠 [RAG 연산부] ---
+# --- 🧠 [RAG 연산부 - 시공간 시간대 가중치 초정밀 보정본] ---
 st.markdown("---")
 with st.spinner("🧠 령이 대뇌 피질: 시공간 통계 탐색 중..."):
     brain_dataset = fetch_forest_fire_stats_brain()
@@ -429,15 +429,19 @@ with st.spinner("🧠 령이 대뇌 피질: 시공간 통계 탐색 중..."):
     
     best_match, min_distance = None, float('inf')
     for data in brain_dataset:
+        # 시간대(Hour) 매칭의 중요도를 극대화하기 위해 시간 페널티 가중치를 1.5 ➔ 8.0으로 대폭 상향
         distance = math.sqrt(
-            ((current_t - data["t"]) * 1.0) ** 2 + ((current_h - data["h"]) * 1.2) ** 2 + 
-            ((current_w - data["w"]) * 2.5) ** 2 + ((current_hr - data["hour"]) * 1.5) ** 2
+            ((current_t - data["t"]) * 1.0) ** 2 + 
+            ((current_h - data["h"]) * 1.0) ** 2 + 
+            ((current_w - data["w"]) * 2.0) ** 2 + 
+            ((current_hr - data["hour"]) * 8.0) ** 2   # 💡 시간 매칭 왜곡 방지선
         )
         if distance < min_distance:
             min_distance = distance
             best_match = data
 
-    similarity_score = max(50.0, min(99.9, 100.0 - (min_distance * 1.3)))
+    # 싱크로율 계산 로직 보정 (시간대가 맞지 않으면 싱크로율이 자연스럽게 드랍되도록 유도)
+    similarity_score = max(50.0, min(99.9, 100.0 - (min_distance * 1.1)))
     box_border = "border: 2px solid #ff4b4b; background-color: #2b1111;" if current_mode_state else "border: 1px solid #1a73e8; background-color: #141824;"
     title_color = "#ff4b4b" if current_mode_state else "#1a73e8"
     rag_conclusion_text = best_match['sol']
