@@ -63,11 +63,29 @@ def fetch_kma_live_weather(stn_id):
 def fetch_forest_fire_stats_brain():
     url = "http://apis.data.go.kr/1400000/forestStusService/getfirestatsservice"
     params = {'serviceKey': API_KEY, 'pageNo': '1', 'numOfRows': '50', 'searchStDt': '20150101', 'searchEdDt': '20251231'}
+    
+    # 🔒 [대표님 피드백 반영: 14시 주간 데이터 시간값 초정밀 동기화 완료]
     knowledge_base = [
-        {"case": "2025년 의성 대형 산불 대참사 (주간 확산 단계)", "t": 15.4, "h": 40.0, "w": 25.0, "hour": 14, "desc": "2025년 3월 발생한 의성 대참사의 낮 시간대 상황. 초속 25m/s의 태풍급 강풍과 주간 상승기류(곡풍)가 결합되어 화선이 산 정상을 향해 무서운 수관화 형태로 치솟아 초동 저지선이 일거에 무너진 실패 사례.", "sol": "💡 **[주간 상승기류 전술]** 강풍형 주간 산불이므로 헬기 공중 살포가 불가능합니다. 능선 상부 방면으로 불길이 가속되므로 대원들을 산마루에서 철수시키고, 국도 방면 임도 초입 관문에 고성능 화학차를 전진 배치해 수막 방어선을 고착하십시오."},
-        {"case": "2025년 의성 대형 산불 대참사 (야간 복사 역전 단계)", "t": 12.0, "h": 45.0, "w": 18.0, "hour": 22, "desc": "2025년 3월 의성 산불의 야간 전환 상황. 복사 냉각으로 기류가 산 정상에서 아래 민가 쪽으로 하강(산풍)하는 시점. 헬기가 철수된 상황에서 야간 강풍을 타고 불길이 골짜기 밑 민가 가옥을 기습 타격한 기록.", "sol": "💡 **[야간 하강기류 전술]** 야간 산풍 물리학이 적용되는 시점입니다. 불길이 아래 민가 방면으로 굴절되므로, 관할 소방대원들은 민가 배후 50m 지점에 방수포 진격을 개시해 '인간 수막 설비(Fire Curtain)' 라인을 가동하십시오."},
-        {"case": "2022년 울진·삼척 소나무림 대참사 (황혼 임계 단계)", "t": 18.5, "h": 12.0, "w": 11.0, "hour": 18, "desc": "습도 12%의 건조경보 속에서 일몰 직전 헬기 철수 데드라인과 겹치며 비산화(飞火) 통제권을 완전히 상실했던 대참사 백서 기록.", "sol": "💡 **[일몰 항공 철수 전술]** 헬기가 철수하는 황혼기이므로 지상 진화대를 '자율 소화 드론 10기' 편대로 전면 백업하십시오. 풍향 벡터 정반대 임도 관문에 방화 지연제를 선제 투하하여 차단벽을 조기 구축해야 합니다."}
+        {
+            "case": "2025년 의성 대형 산불 대참사 (주간 확산 단계)", 
+            "t": 15.4, "h": 40.0, "w": 25.0, "hour": 14, # 💡 대표님이 설정하신 오후 2시(14시)와 100% 일치시킴
+            "desc": "2025년 3월 발생한 의성 대참사의 백주대낮 시간대 상황. 초속 25m/s의 태풍급 강풍과 낮 시간대의 강한 상승기류(곡풍)가 결합되어 불길이 능선 정상부 수관화 형태로 치솟아 초동 저지선이 일거에 무너진 실패 사례.", 
+            "sol": "💡 **[주간 상승기류 곡풍 전술]** 강풍형 주간 산불이므로 상승 기류를 타고 불길이 산 정상부로 가속됩니다. 대원들을 산마루에서 즉시 철수시키고, 국도 방면 임도 초입 관문에 고성능 화학차를 전진 배치해 수막 방어선을 사수하십시오."
+        },
+        {
+            "case": "2025년 의성 대형 산불 대참사 (야간 복사 역전 단계)", 
+            "t": 12.0, "h": 45.0, "w": 18.0, "hour": 22, # 심야 22시
+            "desc": "2025년 3월 의성 산불의 야간 전환 상황. 복사 냉각으로 기류가 산 정상에서 아래 민가 쪽으로 하강(산풍)하는 시점. 헬기가 철수된 상황에서 야간 강풍을 타고 불길이 골짜기 밑 민가 가옥을 기습 타격한 기록.", 
+            "sol": "💡 **[야간 하강기류 산풍 전술]** 야간 산풍 물리학이 적용되는 시점입니다. 불길이 아래 민가 방면으로 굴절되므로, 관할 소방대원들은 민가 배후 50m 지점에 방수포 진격을 개시해 '인간 수막 설비(Fire Curtain)' 라인을 가동하십시오."
+        },
+        {
+            "case": "2022년 울진·삼척 소나무림 대참사 (황혼 임계 단계)", 
+            "t": 18.5, "h": 12.0, "w": 11.0, "hour": 18, # 일몰 황혼기 18시
+            "desc": "습도 12%의 건조경보 속에서 일몰 직전 헬기 철수 데드라인과 겹치며 비산화(飞火) 통제권을 완전히 상실했던 대참사 백서 기록.", 
+            "sol": "💡 **[일몰 항공 철수 전술]** 헬기가 철수하는 황혼기이므로 지상 진화대를 '자율 소화 드론 10기' 편대로 전면 백업하십시오. 풍향 벡터 정반대 임도 관문에 방화 지연제를 선제 투하하여 차단벽을 조기 구축해야 합니다."
+        }
     ]
+    # (이하 생령 공공 API 파싱 파트는 기존 구조 유지)
     try:
         res = requests.get(url, params=params, timeout=1.5)
         if res.status_code == 200:
@@ -423,7 +441,7 @@ with c3:
     st.warning(ai_m30)
     st.error(ai_m60)
 
-# --- 🧠 [RAG 연산부] ---
+# --- 🧠 [RAG 연산부 - 싱크로율 80% 이상 조건부 팝업 마스터본] ---
 st.markdown("---")
 with st.spinner("🧠 령이 대뇌 피질: 시공간 통계 탐색 중..."):
     brain_dataset = fetch_forest_fire_stats_brain()
@@ -433,26 +451,39 @@ with st.spinner("🧠 령이 대뇌 피질: 시공간 통계 탐색 중..."):
     for data in brain_dataset:
         distance = math.sqrt(
             ((current_t - data["t"]) * 1.0) ** 2 + ((current_h - data["h"]) * 1.2) ** 2 + 
-            ((current_w - data["w"]) * 2.5) ** 2 + ((current_hr - data["hour"]) * 8.0) ** 2 # 💡 14시 주간 시간대 초고가중치 락온 유지
+            ((current_w - data["w"]) * 2.5) ** 2 + ((current_hr - data["hour"]) * 8.0) ** 2
         )
         if distance < min_distance:
             min_distance = distance
             best_match = data
 
+    # 🎯 싱크로율 연산 및 보정
     similarity_score = max(50.0, min(99.9, 100.0 - (min_distance * 1.3)))
     box_border = "border: 2px solid #ff4b4b; background-color: #2b1111;" if trigger_emergency_by_prob else "border: 1px solid #1a73e8; background-color: #141824;"
     title_color = "#ff4b4b" if trigger_emergency_by_prob else "#1a73e8"
     rag_conclusion_text = best_match['sol']
 
-st.markdown(f"""
-<div style="{box_border} padding: 20px; border-radius: 8px;">
-    <h3 style="margin: 0 0 10px 0; color: {title_color}; font-weight: bold;">🧠 령이 AI 산림청 OpenAPI 4차원 시공간 추론 결론</h3>
-    <h4 style="margin: 0 0 8px 0; color: white;">📌 자율 기억 매칭: {best_match['case']} (시공간 기상 싱크로율: <span style='color:#ffff00; font-size:18px;'>{similarity_score:.1f}%</span>)</h4>
-    <p style="margin: 0 0 15px 0; color: #ddd; font-size: 14px; line-height: 1.6;"><b>과거 데이터 아카이브 맥락 분석:</b><br>{best_match['desc']}</p>
-    <hr style="border: 0.5px solid #444; margin: 10px 0;">
-    <p style="margin: 0; color: #b9f6ca; font-size: 15px; line-height: 1.6;">{rag_conclusion_text}</p>
-</div>
-""", unsafe_allow_html=True)
+# 🔥 [대표님 지시사항 반영] 싱크로율 80% 이상일 때만 추론 결론 출력 인터록
+if similarity_score >= 80.0:
+    st.markdown(f"""
+    <div style="{box_border} padding: 20px; border-radius: 8px;">
+        <h3 style="margin: 0 0 10px 0; color: {title_color}; font-weight: bold;">🧠 령이 AI 산림청 OpenAPI 4차원 시공간 추론 결론</h3>
+        <h4 style="margin: 0 0 8px 0; color: white;">📌 자율 기억 매칭: {best_match['case']} (시공간 기상 싱크로율: <span style='color:#ffff00; font-size:18px;'>{similarity_score:.1f}%</span>)</h4>
+        <p style="margin: 0 0 15px 0; color: #ddd; font-size: 14px; line-height: 1.6;"><b>과거 데이터 아카이브 맥락 분석:</b><br>{best_match['desc']}</p>
+        <hr style="border: 0.5px solid #444; margin: 10px 0;">
+        <p style="margin: 0; color: #b9f6ca; font-size: 15px; line-height: 1.6;">{rag_conclusion_text}</p>
+    </div>
+    """, unsafe_allow_html=True)
+else:
+    # 🟢 80% 미만 평시 상태일 때는 경고창 대신 스캐너블한 평시 안내 텍스트로 대체
+    st.markdown(f"""
+    <div style="border: 1px dashed #444; background-color: #0e1117; padding: 15px; border-radius: 8px; text-align: center;">
+        <p style="margin: 0; color: #888; font-size: 14px;">
+            🔍 <b>시공간 매칭 모니터링:</b> 현재 기상 기하학적 매칭 최고 싱크로율이 <span style='color:#ffaa00; font-weight:bold;'>{similarity_score:.1f}%</span>로 평시 안정권에 있습니다. <br>
+            <span style='font-size:12px; color:#666;'>(사이드바 시뮬레이터를 통해 풍속 25m/s, 온도 15.4°C 부근으로 악화시켜 싱크로율 80% 돌파 시 대형산불 특수 진술서가 해제됩니다.)</span>
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
 
 # --- 아카이브 로그 대장 ---
 st.divider()
@@ -462,6 +493,6 @@ df_mock_db = pd.DataFrame([{
     "산림청 API 수신 상태": "🚨 실전 대형산불 임계값 돌파 자율 선포" if trigger_emergency_by_prob else "🟢 라이브 OpenAPI 무결성 동기화 (평시 예찰)",
     "경북 관제 행정구역": target_city + " 작전소" if trigger_emergency_by_prob else f"{target_city} 상시 예찰 지대",
     "AI 연산 발전 확률": f"{city_data['prob']:.1f}%",
-    "AI 최단거리 전술 판정": "위험률 75% 돌파 ➔ 실전 관제 도면 긴급 해제 성공" if trigger_emergency_by_prob else "평시 예찰 모드 (지도 잠금 / 시뮬레이션 보드 락오프 가동)"
+    "AI 최단거리 전술 판정": f"시공간 매칭 매커니즘 작동 중 (최고 싱크밀도: {similarity_score:.1f}%)"
 }])
 st.table(df_mock_db)
