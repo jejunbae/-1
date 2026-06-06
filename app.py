@@ -30,7 +30,7 @@ warnings.filterwarnings("ignore", category=UserWarning)
 warnings.filterwarnings("ignore", message=".*ScriptRunContext.*")
 
 st.title("🚨 경상북도 실시간 산불 소방 작전 지휘 플랫폼 '령이'")
-st.markdown(f"**Core Engine v67.1:** 🎯 시뮬레이션 매칭 락 버그 완벽 박멸 및 경북 읍·면·동 주소 무결성 결합본")
+st.markdown(f"**Core Engine v67.2:** 🎛️ 슬라이더 조작 UI 즉각 반영 오버라이딩 & 🐛 라이브 API 연산 간섭 버그 원천 차단본")
 st.divider()
 
 # =========================================================================================
@@ -138,7 +138,7 @@ st.sidebar.header("🎛️ 경상북도 읍·면·동 통합 제어판")
 st.sidebar.subheader("⏰ 관제 작전 시각 설정")
 use_manual_time = st.sidebar.checkbox("⏰ 수동 작전 시각 시뮬레이션 가동", value=False)
 if use_manual_time:
-    op_hour = st.sidebar.slider("가상 작전 타임라인 시각", 0, 23, value=14) # 기본값 낮 14시 세팅
+    op_hour = st.sidebar.slider("가상 작전 타임라인 시각", 0, 23, value=14)
 else:
     op_hour = int(now_kst.hour)
 
@@ -147,7 +147,6 @@ st.sidebar.subheader("초국지성 기상 변수 강제 조정")
 sim_mode = st.sidebar.checkbox("🌡️ 특정 주소지 기상 악화 시뮬레이션", value=False, key="sim_mode_check")
 
 gb_topology_db = load_gb_topology_db()
-# 💡 [버그 완전 박멸]: 기본 매칭용 가상 주소를 딕셔너리 키 명칭과 토시 하나 안틀리고 완벽 싱크
 sim_address = "경상북도 의성군 점곡면 사촌리 배후 야산 (점곡길 산림)"
 sim_t, sim_h, sim_w = 15.4, 40.0, 25.0
 
@@ -168,13 +167,16 @@ for address, info in gb_topology_db.items():
     t, h, w, wd = fetch_kma_grid_weather(info["nx"], info["ny"])
     slope = info["slope"]
     
+    # 🎯 [대표님 오더 반영 핵심]: 슬라이더 주입 시 난수가 덮어씌워진 local 변수가 아닌 슬라이더 날것의 변수가 꽂히도록 로직 스왑
     if sim_mode and address == sim_address:
-        t, h, w = sim_t, sim_h, sim_w
-
-    seed_factor = (info["stn"] % 7) - 3
-    local_t = max(12.0, t + (seed_factor * 0.4))
-    local_h = max(15.0, min(95.0, h + (seed_factor * 2.5)))
-    local_w = max(0.8, w + (seed_factor * 0.3))
+        local_t = sim_t
+        local_h = sim_h
+        local_w = sim_w
+    else:
+        seed_factor = (info["stn"] % 7) - 3
+        local_t = max(12.0, t + (seed_factor * 0.4))
+        local_h = max(15.0, min(95.0, h + (seed_factor * 2.5)))
+        local_w = max(0.8, w + (seed_factor * 0.3))
 
     humidity_dryness = (100 - local_h) / 100.0
     if local_h <= 35.0: humidity_dryness *= 1.4
@@ -205,13 +207,12 @@ for address, info in gb_topology_db.items():
         "penalty": difficulty_penalty, "fire_station": info["fire_station"], "fs_lat": info["fs_lat"], "fs_lon": info["fs_lon"], "route": info["route"]
     })
 
-# 🎯 [버그 수정 하이라이트]: 75% 기준 자율 실전 체제 자동 스위칭 인터록 정상화
+# 🎯 75% 기준 자율 실전 체제 자동 스위칭 인터록 완벽 동기화
 PROB_THRESHOLD = 75.0
 trigger_emergency_by_prob = False
 
 target_sim_data = [x for x in all_scanned_list if x["address"] == sim_address]
 if target_sim_data and sim_mode:
-    # 💡 의성군의 정밀 주소 텍스트가 완벽하게 바인딩되어 이제 무조건 True를 탑니다!
     if target_sim_data[0]["prob"] >= PROB_THRESHOLD:
         trigger_emergency_by_prob = True
 
@@ -246,7 +247,7 @@ else:
     st.success(f"🟢 [경북 라이브 읍·면·동 예찰 모드] 대형산불 위험 후보지 자동 스캔 및 실시간 피해 범위 시뮬레이터 상시 가동 중")
 
 # 세분화 TOP 5 카드 표출 구역
-cols = st.columns(4) # 가로 칸 확장
+cols = st.columns(4)
 for idx, row in df_nation.iterrows():
     if idx >= 4: break
     with cols[idx]:
@@ -293,7 +294,7 @@ eta_minutes = max(4, int(dist_fs_to_fire * 1.8))
 eta_str = f"약 {eta_minutes}분 {random.randint(10, 59):02d}초"
 
 # =========================================================================================
-# 🗺️ [2단계 전술 지도 레이아웃 - 75% 임계점 돌파 시 자율 사출 활성화 완료]
+# 🗺️ [2단계 전술 지도 레이아웃]
 # =========================================================================================
 if trigger_emergency_by_prob:
     st.divider()
@@ -358,7 +359,7 @@ if trigger_emergency_by_prob:
         initial_view_state=pdk.ViewState(latitude=(city_data["lat"]+city_data["fs_lat"])/2, longitude=(city_data["lon"]+city_data["fs_lon"])/2, zoom=11.6, pitch=0, bearing=0)
     ))
 
-# --- 📡 3열 제원 패널 (상시 락오프) ---
+# --- 📡 3열 제원 패널 ---
 st.markdown("---")
 c1, c2, c3 = st.columns([1, 1.2, 1.2])
 
