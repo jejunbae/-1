@@ -24,11 +24,9 @@ warnings.filterwarnings("ignore", message=".*ScriptRunContext.*")
 # 🔄 [세션 상태 관리 및 초기화 보호선]
 if "selected_spot" not in st.session_state:
     st.session_state["selected_spot"] = None
-if "prev_active_mode" not in st.session_state:
-    st.session_state["prev_active_mode"] = False
 
 st.title("🚨 경상북도 실시간 산불 소방 작전 지휘 플랫폼 '령이'")
-st.markdown(f"**Core Engine v67.5:** 🔄 평시-전시 지조 다이내믹 On/Off UX 대전환 완결본 (최종 락온)")
+st.markdown(f"**Core Engine v67.6:** 🗺️ 시뮬레이션 모드 가동 시 지도 무조건 상시 고정 및 전천후 확산 시뮬레이터 버전")
 st.divider()
 
 # =========================================================================================
@@ -99,7 +97,7 @@ def get_wind_direction_text(deg):
     elif 247.5 <= deg < 292.5: return "서풍 (➡️ 동쪽 확산 위험)", "동쪽", 1, 0, "➡️"
     else: return "북서풍 (↘️ 남동쪽 확산 위험)", "남동쪽", 0.7, -0.7, "↘️"
 
-def generate_ai_autonomous_sop(city_data, op_hour, is_emergency, eta_str):
+def generate_ai_autonomous_sop(city_data, op_hour, is_sim_mode, eta_str):
     station = city_data["fire_station"]
     wind = city_data["w"]
     humidity = city_data["h"]
@@ -107,26 +105,31 @@ def generate_ai_autonomous_sop(city_data, op_hour, is_emergency, eta_str):
     pine = city_data["pine_ratio"]
     road = city_data["road_density"]
     
-    raw_ffdi = (wind * 1.5) + ((100 - humidity) * 0.4) + (slope * 0.3)
-    sop_level = "🔥 [소방청 SOP 최고단계: 대형산불 동원령 3단계]" if raw_ffdi >= 45.0 or is_emergency else "🟢 [소방청 SOP 평시단계: 초동진화대 대기]"
+    # 풍속에 따른 탄력적 위험 레벨링
+    if wind >= 20.0:
+        sop_level = "🔥 [소방청 SOP 최고단계: 대형산불 동원령 3단계]"
+    elif wind >= 10.0:
+        sop_level = "⚠️ [소방청 SOP 경계단계: 관내 전 소방력 전진 배치]"
+    else:
+        sop_level = "🔸 [소방청 SOP 초동단계: 지구대 국지 진화선 가동]"
 
     if 18 <= op_hour or op_hour < 6:
-        time_context = "🌙 [야간 안전 통제령 발효]"
-        heli_tactic = "❌ [항공 규정] 일몰 후 진화헬기 비행 금지 ➔ 지상 특수진화대 전술 전환."
-        micro_climate = "📉 [산풍 우세] 기류가 능선에서 민가 방향으로 하강하므로 민가 배후에 수막 설비 전개."
+        time_context = "🌙 [야간 소화 통제령]"
+        heli_tactic = "❌ [항공 철수] 야간 규정상 진화헬기 비행 금지 ➔ 야간 산풍 대비 지상대 투입."
+        micro_climate = "📉 [하강 기류] 기류가 민가 방향으로 내려오므로 가옥 주변에 방어 차단벽 구축."
     else:
-        time_context = "☀️ [주간 총력 공중 전개 시기]"
-        heli_tactic = f"🚁 [임무 배정] 최단거리 담수지({city_data['water_dist']:.1f}km) 대상 헬기 교대 취수 가동."
-        micro_climate = "📈 [곡풍 추론] 상승 기류로 인해 능선 상부로 치솟는 '수관화' 차단용 저지선 구축."
+        time_context = "☀️ [주간 총력 공중 진화]"
+        heli_tactic = f"🚁 [공중 진화] 인근 담수지({city_data['water_dist']:.1f}km) 연계 헬기 셔틀 취수 가동."
+        micro_climate = "📈 [상승 곡풍] 산정상 수관화 가속 위험. 산마루 진입을 금하고 측면 임도 차단."
 
-    if is_emergency:
-        m10 = f"{sop_level} {time_context} 관할 **[{station}]** 소방대 임야 출동 진격로 락온. **(예상 도착 시간: {eta_str})**"
-        m30 = f"🛡️ [현장 지휘소 판단] {heli_tactic} 소나무 밀도 {pine}% 임상 비산화 주의."
-        m60 = f"📢 [방재 가이드] {micro_climate} 임도 밀도 {road}%에 맞춰 화학차 전진 배치."
+    if is_sim_mode:
+        m10 = f"{sop_level} {time_context} 관할 **[{station}]** 실전 시뮬레이션 출동 락온. **(예상 도착 시간: {eta_str})**"
+        m30 = f"🛡️ [화선 진압 판단] {heli_tactic} 소나무 수종 {pine}% 임상 비산화 차단막 전개."
+        m60 = f"📢 [방재 전술 가이드] {micro_climate} 해당 임도 밀도 {road}% 거점에 소방 용수 소화전 확보."
     else:
-        m10 = f"{sop_level} 관내 평시 예찰 및 소방 상시 무전 개방령."
-        m30 = f"🔸 [가상 연산 알림] 우측 시뮬레이션 보드는 실시간 기상 가중치를 바탕으로 상시 락오프 가동 중입니다."
-        m60 = f"🔹 [시스템 알림] 현재 평시 관제 모드입니다. 기상 악화 시뮬레이션을 가동하여 임계 확률 돌파 시 실전 지도가 팝업됩니다."
+        m10 = f"{sop_level} 관내 평시 예찰 및 령이 Core Engine 실시간 무전 모니터링."
+        m30 = f"🔸 현재 평시 관제 모드입니다. 사이드바 시뮬레이터를 가동하시면 즉시 실전 지도와 초동 조치 SOP가 사출됩니다."
+        m60 = f"🔹 실시간 OpenAPI 기반으로 도내 위험 징후를 추적하고 있습니다."
 
     return m10, m30, m60
 
@@ -141,26 +144,23 @@ else:
 
 st.sidebar.markdown("---")
 st.sidebar.subheader("초국지성 기상 변수 강제 조정")
-sim_mode = st.sidebar.checkbox("🌡️ 특정 주소지 기상 악화 시뮬레이션", value=False, key="sim_mode_check")
+# 💡 [대표님 오더 수렴]: 체크박스가 켜지면 무조건 지도가 사출되도록 고정 스위치로 사용
+sim_mode = st.sidebar.checkbox("🌡️ 특정 주소지 기상 악화 시뮬레이션 가동", value=False, key="sim_mode_check")
 
 gb_topology_db = load_gb_topology_db()
 sim_address = "경상북도 의성군 점곡면 사촌리 배후 야산 (점곡길 산림)"
 sim_t, sim_h, sim_w = 15.4, 40.0, 25.0
 
 if sim_mode:
-    sim_address = st.sidebar.selectbox("경북 타겟 세분화 주소지 선택", list(gb_topology_db.keys()), index=1)
+    sim_address = st.sidebar.selectbox("경북 타겟 시뮬레이션 주소지 선택", list(gb_topology_db.keys()), index=1)
     sim_t = st.sidebar.slider("가상 온도 (°C)", 10.0, 45.0, value=15.4)
     sim_h = st.sidebar.slider("가상 상대습도 (%)", 0.0, 100.0, value=40.0)
-    sim_w = st.sidebar.slider("가상 풍속 (m/s)", 0.0, 30.0, value=25.0)
+    sim_w = st.sidebar.slider("가상 풍속 (m/s)", 0.0, 30.0, value=12.0) # 기본값을 일반 바람 수준으로 조정
 
 # =========================================================================================
 # 🔄 경북 데이터 파이프라인 연산 루프
 # =========================================================================================
-if "history_probs" not in st.session_state:
-    st.session_state["history_probs"] = {}
-
 all_scanned_list = []
-trigger_emergency_by_prob = False
 
 for address, info in gb_topology_db.items():
     t, h, w, wd = fetch_kma_grid_weather(info["nx"], info["ny"])
@@ -185,10 +185,9 @@ for address, info in gb_topology_db.items():
     
     final_prob = min(97.8, max(18.5, base_prob))
     
-    # 🎯 [실전 스위칭 동기화] 시뮬레이션 모드가 커져있고 고풍속 기준 충족 시에만 비상령 선포
-    if sim_mode and address == sim_address and local_w >= 20.0:
-        final_prob = 99.4
-        trigger_emergency_by_prob = True
+    # 시뮬레이션 가동중일때 타겟 주소는 위험지수로 시각화 락온
+    if sim_mode and address == sim_address:
+        final_prob = max(final_prob, 65.0) # 시뮬레이션시 최소 65% 이상 위험 시연
 
     difficulty_penalty = (info["water_dist"] * 0.12) + ((100 - info["road_density"]) * 0.008) + (info["pine_ratio"] * 0.005)
     spread_factor = 0.001 + (local_w * 0.003) + (slope * 0.001)
@@ -203,20 +202,19 @@ for address, info in gb_topology_db.items():
 
 df_nation = pd.DataFrame(all_scanned_list).sort_values(by="prob", ascending=False).reset_index(drop=True)
 
-# 💡 [UX 리셋 인터록]: 기상 시뮬레이션 체크박스가 꺼지면 강제로 세션 및 비상 락을 초기화하여 평시로 복귀시킵니다.
-if not sim_mode:
-    trigger_emergency_by_prob = False
-    st.session_state["selected_spot"] = df_nation.iloc[0]["address"]
+# 주소 매핑 고정 제어선
+if sim_mode:
+    st.session_state["selected_spot"] = sim_address
 else:
-    if trigger_emergency_by_prob:
-        st.session_state["selected_spot"] = sim_address
+    if st.session_state["selected_spot"] not in df_nation["address"].values:
+        st.session_state["selected_spot"] = df_nation.iloc[0]["address"]
 
-target_spot = st.session_state["selected_spot"] if st.session_state["selected_spot"] in df_nation["address"].values else df_nation.iloc[0]["address"]
+target_spot = st.session_state["selected_spot"]
 city_data = df_nation[df_nation["address"] == target_spot].iloc[0]
 
 # --- UI 상단 상태 메시지 ---
-if trigger_emergency_by_prob:
-    st.error(f"🚨 [AI 자율 실전 화재 선포] 위험률 {city_data['prob']:.1f}%로 임계선 돌파! 2단계 평면 전술 지도가 1순위로 즉시 강제 사출되었습니다.")
+if sim_mode:
+    st.error(f"🚨 [AI 가상 산불 시뮬레이터 가동] 기상 변수 인입 중 ➔ 현재 풍속: {city_data['w']:.1f}m/s 조건에서의 확산 범위 도면을 강제 출력합니다.")
 else:
     st.success(f"🟢 [경북 라이브 읍·면·동 예찰 모드] 대형산불 위험 후보지 자동 스캔 및 실시간 피해 범위 시뮬레이터 상시 가동 중")
 
@@ -226,10 +224,10 @@ for idx, row in df_nation.iterrows():
     if idx >= 4: break
     with cols[idx]:
         display_name = row["address"].split(" (")[0]
-        if trigger_emergency_by_prob and row["address"] == sim_address:
+        if sim_mode and row["address"] == sim_address:
             border_style = "border: 3px dashed #ff4b4b; background-color: #3b0000; border-radius: 8px; padding: 12px; text-align: center;"
             prob_color = "#ff4b4b"
-            title_prefix = "🔥 [실전] "
+            title_prefix = "🔥 [시뮬레이션] "
         else:
             border_style = "border: 1px solid #444; background-color: #0e1117; border-radius: 8px; padding: 12px; text-align: center;"
             prob_color = "#ffaa00"
@@ -250,32 +248,36 @@ for idx, row in df_nation.iterrows():
             st.session_state["selected_spot"] = row["address"]
             st.rerun()
 
-# --- 동적 수치 계산부 (락오프 파이프라인) ---
+# --- 동적 수치 계산부 (풍속 연동 물리식) ---
 wd_text, danger_direction, dx, dy, arrow_icon = get_wind_direction_text(city_data["wd"])
+# 풍속이 낮으면 소형 산불 확산, 강하면 대형 확산 벡터 연산
 base_spread_rate = (city_data['w'] * 1.5) * (1.0 + (city_data['slope'] / 35.0)) * (1.0 + city_data['penalty'])
-p_10 = int(city_data['score'] * base_spread_rate * 15)
-p_30 = int(p_10 * 3.8)
-p_60 = int(p_30 * 4.2)
+p_10 = max(15, int(city_data['score'] * base_spread_rate * 12))
+p_30 = int(p_10 * 3.5)
+p_60 = int(p_30 * 4.0)
+
 dist_fs_to_fire = math.sqrt((city_data["lat"] - city_data["fs_lat"])**2 + (city_data["lon"] - city_data["fs_lon"])**2) * 111.0
 eta_minutes = max(4, int(dist_fs_to_fire * 1.8))
 eta_str = f"약 {eta_minutes}분 {random.randint(10, 59):02d}초"
 
 # =========================================================================================
-# 🗺️ [2단계 전술 지도 레이아웃 - 🎯 대표님 오더 반영: 평시 상태일 땐 완벽 소멸하도록 인터록 적용]
+# 🗺️ [2단계 전술 지도 레이아웃 - 🎯 대표님 오더: sim_mode가 True면 기상 무관 무조건 상시 노출]
 # =========================================================================================
-if trigger_emergency_by_prob:
+if sim_mode:
     st.divider()
-    st.header(f"🗺️ [1순위 초동 대응 작전 도면] 령이 AI 수관화 확산선 벡터 ➔ [{city_data['address'].split(' (')[0]}]")
+    st.header(f"🗺️ [시뮬레이션 전술 도면] {city_data['w']:.1f} m/s 기준 수관화 확산선 벡터 ➔ [{city_data['address'].split(' (')[0]}]")
     
     def generate_asymmetric_fire_front(lon, lat, dx, dy, scale, wind_w):
         points = []
         segments = 32
+        # 풍속(wind_w)이 낮으면 원형에 가깝게, 강하면 바람방향으로 길쭉해지도록 가변 렌더링
+        wind_stretch = max(0.2, wind_w * 0.15) 
         for j in range(segments):
             angle = (j / segments) * 2 * math.pi
             r_lon = 0.0025 * scale * math.cos(angle)
             r_lat = 0.0025 * scale * math.sin(angle)
             alignment = math.cos(angle) * dx + math.sin(angle) * dy
-            stretch = 1.0 + max(0.0, alignment) * (wind_w * 0.15)
+            stretch = 1.0 + max(0.0, alignment) * wind_stretch
             p_lon = lon + r_lon * stretch + (dx * scale * 0.0005 * wind_w)
             p_lat = lat + r_lat * stretch + (dy * scale * 0.0005 * wind_w)
             points.append([p_lon, p_lat])
@@ -348,8 +350,8 @@ with c1:
     """, unsafe_allow_html=True)
 
 with c2:
-    status_color = "#ff4b4b" if trigger_emergency_by_prob else "#66bb6a"
-    calc_status_text = f"<span style='color:#ff4b4b; font-weight:bold;'>⚠️ 령이 실전 확산 모델링 연산 중</span>" if trigger_emergency_by_prob else f"<span style='color:#66bb6a; font-weight:bold;'>🟢 평시 라이브 예측 연산 중 (락오프)</span>"
+    status_color = "#ff4b4b" if sim_mode else "#66bb6a"
+    calc_status_text = f"<span style='color:#ff4b4b; font-weight:bold;'>⚠️ 령이 임의 시뮬레이션 연산 중</span>" if sim_mode else f"<span style='color:#66bb6a; font-weight:bold;'>🟢 평시 라이브 예측 연산 중 (락오프)</span>"
     
     st.markdown(f"""
     <div style="background-color: #1c1d24; padding: 18px; border-radius: 8px; border-left: 5px solid {status_color}; min-height: 330px;">
@@ -377,12 +379,12 @@ with c2:
                 <td style="color:#aaa;">벡터 락온</td>
             </tr>
         </table>
-        <p style="margin:2px 0; font-size:11px; color: #a8c7fa;">🔎 본 수치는 경북 해당 주소지의 실시간 인덱스로 추론된 값입니다.</p>
+        <p style="margin:2px 0; font-size:11px; color: #a8c7fa;">🔎 본 수치는 슬라이더 기상 수치값에 맞춰 실시간으로 동적 변환됩니다.</p>
     </div>
     """, unsafe_allow_html=True)
 
 with c3:
-    ai_m10, ai_m30, ai_m60 = generate_ai_autonomous_sop(city_data, op_hour, is_emergency=trigger_emergency_by_prob, eta_str=eta_str)
+    ai_m10, ai_m30, ai_m60 = generate_ai_autonomous_sop(city_data, op_hour, is_sim_mode=sim_mode, eta_str=eta_str)
     st.markdown(f"<h4 style='margin:0 0 10px 0; color:#ff4b4b; font-size:15px; font-weight:bold;'>🧠 [소방청 SOP 동기화] 실시간 전술 지시서</h4>", unsafe_allow_html=True)
     st.info(ai_m10)
     st.warning(ai_m30)
@@ -404,17 +406,19 @@ with st.spinner("🧠 령이 대뇌 피질: 경북 시공간 통계 탐색 중..
             min_distance = distance
             best_match = data
 
-    similarity_score = 96.7 if (trigger_emergency_by_prob and "의성군" in target_spot) else max(50.0, min(79.5, 100.0 - (min_distance * 1.3)))
-    box_border = "border: 2px solid #ff4b4b; background-color: #2b1111;" if trigger_emergency_by_prob else "border: 1px solid #1a73e8; background-color: #141824;"
-    title_color = "#ff4b4b" if trigger_emergency_by_prob else "#1a73e8"
+    # 의성군 타겟이면서 고풍속일때 아카이브 결론 도출
+    is_high_danger = sim_mode and "의성군" in target_spot and city_data["w"] >= 20.0
+    similarity_score = 96.7 if is_high_danger else max(50.0, min(85.5, 100.0 - (min_distance * 1.3)))
+    box_border = "border: 2px solid #ff4b4b; background-color: #2b1111;" if is_high_danger else "border: 1px solid #1a73e8; background-color: #141824;"
+    title_color = "#ff4b4b" if is_high_danger else "#1a73e8"
     rag_conclusion_text = best_match['sol']
 
-if similarity_score >= 80.0 or trigger_emergency_by_prob:
+if sim_mode:
     st.markdown(f"""
     <div style="{box_border} padding: 20px; border-radius: 8px;">
-        <h3 style="margin: 0 0 10px 0; color: {title_color}; font-weight: bold;">🧠 령이 AI 산림청 OpenAPI 4차원 시공간 추론 결론</h3>
-        <h4 style="margin: 0 0 8px 0; color: white;">📌 자율 기억 매칭: {best_match['case']} (시공간 기상 싱크로율: <span style='color:#ffff00; font-size:18px;'>{similarity_score:.1f}%</span>)</h4>
-        <p style="margin: 0 0 15px 0; color: #ddd; font-size: 14px; line-height: 1.6;"><b>과거 데이터 아카이브 맥락 분석:</b><br>{best_match['desc']}</p>
+        <h3 style="margin: 0 0 10px 0; color: {title_color}; font-weight: bold;">🧠 령이 AI 산림청 OpenAPI 시공간 추론 결론 (시뮬레이터 모드)</h3>
+        <h4 style="margin: 0 0 8px 0; color: white;">📌 가상 날씨 데이터 매칭: {best_match['case']} (기상 시뮬레이션 유사도: <span style='color:#ffff00; font-size:18px;'>{similarity_score:.1f}%</span>)</h4>
+        <p style="margin: 0 0 15px 0; color: #ddd; font-size: 14px; line-height: 1.6;"><b>과거 유사 기상 아카이브 맥락 분석:</b><br>{best_match['desc']}</p>
         <p style="margin: 0; color: #b9f6ca; font-size: 15px; line-height: 1.6;">{rag_conclusion_text}</p>
     </div>
     """, unsafe_allow_html=True)
@@ -422,8 +426,8 @@ else:
     st.markdown(f"""
     <div style="border: 1px dashed #444; background-color: #0e1117; padding: 15px; border-radius: 8px; text-align: center;">
         <p style="margin: 0; color: #888; font-size: 14px;">
-            🔍 <b>경북 시공간 RAG 모니터링:</b> 현재 도내 최고 매칭 싱크밀도가 <span style='color:#ffaa00; font-weight:bold;'>{similarity_score:.1f}%</span>로 평시 안정권에 있습니다. <br>
-            <span style='font-size:12px; color:#666;'>(사이드바 시뮬레이터를 조작해 풍속 25m/s 이상 주입 시 의성 대참사 데이터셋이 강제 동기화 해제됩니다.)</span>
+            🔍 <b>경북 시공간 RAG 모니터링:</b> 현재 평시 관제 상태입니다. <br>
+            <span style='font-size:12px; color:#666;'>(사이드바 시뮬레이터를 켜시면 날씨 조건에 관계없이 해당 주소지의 산불 확산 모델링 지도와 SOP 지시서가 상시 표출됩니다.)</span>
         </p>
     </div>
     """, unsafe_allow_html=True)
@@ -433,9 +437,9 @@ st.divider()
 st.subheader("📋 령이 자율 포착 로그 대장 (경상북도 소방 재난 방재 시스템 아카이브)")
 df_mock_db = pd.DataFrame([{
     "령이 실시간 감지 시각": now_kst.strftime("%Y-%m-%d %H:%M:%S"),
-    "산림청 API 수신 상태": "🚨 경북 대형산불 임계값 돌파 자율 선포 완료" if trigger_emergency_by_prob else "🟢 라이브 OpenAPI 경북 권역 무결성 동기화 (평시 예찰)",
+    "산림청 API 수신 상태": "⚠️ 가상 기상 변수 주입 시뮬레이션 고정 모드" if sim_mode else "🟢 라이브 OpenAPI 경북 권역 무결성 동기화 (평시 예찰)",
     "관제 행정구역 축선": city_data['address'].split(" (")[0],
     "AI 연산 발전 확률": f"{city_data['prob']:.1f}%",
-    "AI 최단거리 전술 판정": f"초국지성 공간 매칭 연산 완료 (최고 싱크밀도: {similarity_score:.1f}%)"
+    "AI 최단거리 전술 판정": f"초국지성 공간 매칭 연산 완료 (시뮬레이션 가동 중)" if sim_mode else f"라이브 데이터 동기화 완료"
 }])
 st.table(df_mock_db)
