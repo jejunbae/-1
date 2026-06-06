@@ -21,14 +21,14 @@ import warnings
 warnings.filterwarnings("ignore", category=UserWarning)
 warnings.filterwarnings("ignore", message=".*ScriptRunContext.*")
 
-# 🔄 [세션 상태 관리 및 초기화 보호선 - 무조건 강제 고정]
+# 🔄 [세션 상태 관리 및 초기화 보호선]
 if "selected_spot" not in st.session_state:
-    st.session_state["selected_spot"] = "경상북도 의성군 점곡면 사촌리 배후 야산 (점곡길 산림)"
+    st.session_state["selected_spot"] = None
 if "prev_active_mode" not in st.session_state:
     st.session_state["prev_active_mode"] = False
 
 st.title("🚨 경상북도 실시간 산불 소방 작전 지휘 플랫폼 '령이'")
-st.markdown(f"**Core Engine v67.4:** 🛠️ 세션 스테이트 엔진 강제 고정 및 시뮬레이터 UI 데이터 미동기화 현상 완벽 해결본")
+st.markdown(f"**Core Engine v67.5:** 🔄 평시-전시 지조 다이내믹 On/Off UX 대전환 완결본 (최종 락온)")
 st.divider()
 
 # =========================================================================================
@@ -133,24 +133,32 @@ def generate_ai_autonomous_sop(city_data, op_hour, is_emergency, eta_str):
 # --- 🎛️ 사이드바 시뮬레이터 종합 통제 제어판 ---
 st.sidebar.header("🎛️ 경상북도 읍·면·동 통합 제어판")
 
-use_manual_time = st.sidebar.checkbox("⏰ 수동 작전 시각 시뮬레이션 가동", value=True)
-op_hour = st.sidebar.slider("가상 작전 타임라인 시각", 0, 23, value=14)
+use_manual_time = st.sidebar.checkbox("⏰ 수동 작전 시각 시뮬레이션 가동", value=False)
+if use_manual_time:
+    op_hour = st.sidebar.slider("가상 작전 타임라인 시각", 0, 23, value=14)
+else:
+    op_hour = int(now_kst.hour)
 
 st.sidebar.markdown("---")
 st.sidebar.subheader("초국지성 기상 변수 강제 조정")
-# 💡 [핵심 버그 수정]: 시뮬레이션 모드를 항상 켜두고 슬라이더 세션 상태를 고정시킵니다.
-sim_mode = st.sidebar.checkbox("🌡️ 특정 주소지 기상 악화 시뮬레이션", value=True, key="sim_mode_check")
+sim_mode = st.sidebar.checkbox("🌡️ 특정 주소지 기상 악화 시뮬레이션", value=False, key="sim_mode_check")
 
 gb_topology_db = load_gb_topology_db()
-sim_address = st.sidebar.selectbox("경북 타겟 세분화 주소지 선택", list(gb_topology_db.keys()), index=1)
+sim_address = "경상북도 의성군 점곡면 사촌리 배후 야산 (점곡길 산림)"
+sim_t, sim_h, sim_w = 15.4, 40.0, 25.0
 
-sim_t = st.sidebar.slider("가상 온도 (°C)", 10.0, 45.0, value=15.4)
-sim_h = st.sidebar.slider("가상 상대습도 (%)", 0.0, 100.0, value=40.0)
-sim_w = st.sidebar.slider("가상 풍속 (m/s)", 0.0, 30.0, value=25.0)
+if sim_mode:
+    sim_address = st.sidebar.selectbox("경북 타겟 세분화 주소지 선택", list(gb_topology_db.keys()), index=1)
+    sim_t = st.sidebar.slider("가상 온도 (°C)", 10.0, 45.0, value=15.4)
+    sim_h = st.sidebar.slider("가상 상대습도 (%)", 0.0, 100.0, value=40.0)
+    sim_w = st.sidebar.slider("가상 풍속 (m/s)", 0.0, 30.0, value=25.0)
 
 # =========================================================================================
-# 🔄 경북 데이터 파이프라인 연산 루프 (데이터 오염 차단 격리)
+# 🔄 경북 데이터 파이프라인 연산 루프
 # =========================================================================================
+if "history_probs" not in st.session_state:
+    st.session_state["history_probs"] = {}
+
 all_scanned_list = []
 trigger_emergency_by_prob = False
 
@@ -158,7 +166,6 @@ for address, info in gb_topology_db.items():
     t, h, w, wd = fetch_kma_grid_weather(info["nx"], info["ny"])
     slope = info["slope"]
     
-    # 🎯 [슬라이더 강제 하이재킹 인터록]: 시뮬레이션 타겟 주소는 무조건 슬라이더 값만 사용
     if sim_mode and address == sim_address:
         local_t = sim_t
         local_h = sim_h
@@ -178,7 +185,7 @@ for address, info in gb_topology_db.items():
     
     final_prob = min(97.8, max(18.5, base_prob))
     
-    # 🚨 [강제 해제 장치]: 의성군 주간 25m/s 진입 시 무조건 75%를 무조건 강제 돌파하게 락온
+    # 🎯 [실전 스위칭 동기화] 시뮬레이션 모드가 커져있고 고풍속 기준 충족 시에만 비상령 선포
     if sim_mode and address == sim_address and local_w >= 20.0:
         final_prob = 99.4
         trigger_emergency_by_prob = True
@@ -194,13 +201,17 @@ for address, info in gb_topology_db.items():
         "penalty": difficulty_penalty, "fire_station": info["fire_station"], "fs_lat": info["fs_lat"], "fs_lon": info["fs_lon"], "route": info["route"]
     })
 
-# 🔄 랭킹 빌드 및 현재 타겟 지정 싱크로율 복구
 df_nation = pd.DataFrame(all_scanned_list).sort_values(by="prob", ascending=False).reset_index(drop=True)
 
-if trigger_emergency_by_prob:
-    st.session_state["selected_spot"] = sim_address
+# 💡 [UX 리셋 인터록]: 기상 시뮬레이션 체크박스가 꺼지면 강제로 세션 및 비상 락을 초기화하여 평시로 복귀시킵니다.
+if not sim_mode:
+    trigger_emergency_by_prob = False
+    st.session_state["selected_spot"] = df_nation.iloc[0]["address"]
+else:
+    if trigger_emergency_by_prob:
+        st.session_state["selected_spot"] = sim_address
 
-target_spot = st.session_state["selected_spot"]
+target_spot = st.session_state["selected_spot"] if st.session_state["selected_spot"] in df_nation["address"].values else df_nation.iloc[0]["address"]
 city_data = df_nation[df_nation["address"] == target_spot].iloc[0]
 
 # --- UI 상단 상태 메시지 ---
@@ -250,69 +261,70 @@ eta_minutes = max(4, int(dist_fs_to_fire * 1.8))
 eta_str = f"약 {eta_minutes}분 {random.randint(10, 59):02d}초"
 
 # =========================================================================================
-# 🗺️ [2단계 전술 지도 레이아웃 - 이제 어떤 조건에서도 무조건 강제 개방]
+# 🗺️ [2단계 전술 지도 레이아웃 - 🎯 대표님 오더 반영: 평시 상태일 땐 완벽 소멸하도록 인터록 적용]
 # =========================================================================================
-st.divider()
-st.header(f"🗺️ [1순위 초동 대응 작전 도면] 령이 AI 수관화 확산선 벡터 ➔ [{city_data['address'].split(' (')[0]}]")
+if trigger_emergency_by_prob:
+    st.divider()
+    st.header(f"🗺️ [1순위 초동 대응 작전 도면] 령이 AI 수관화 확산선 벡터 ➔ [{city_data['address'].split(' (')[0]}]")
+    
+    def generate_asymmetric_fire_front(lon, lat, dx, dy, scale, wind_w):
+        points = []
+        segments = 32
+        for j in range(segments):
+            angle = (j / segments) * 2 * math.pi
+            r_lon = 0.0025 * scale * math.cos(angle)
+            r_lat = 0.0025 * scale * math.sin(angle)
+            alignment = math.cos(angle) * dx + math.sin(angle) * dy
+            stretch = 1.0 + max(0.0, alignment) * (wind_w * 0.15)
+            p_lon = lon + r_lon * stretch + (dx * scale * 0.0005 * wind_w)
+            p_lat = lat + r_lat * stretch + (dy * scale * 0.0005 * wind_w)
+            points.append([p_lon, p_lat])
+        points.append(points[0])
+        return points
 
-def generate_asymmetric_fire_front(lon, lat, dx, dy, scale, wind_w):
-    points = []
-    segments = 32
-    for j in range(segments):
-        angle = (j / segments) * 2 * math.pi
-        r_lon = 0.0025 * scale * math.cos(angle)
-        r_lat = 0.0025 * scale * math.sin(angle)
-        alignment = math.cos(angle) * dx + math.sin(angle) * dy
-        stretch = 1.0 + max(0.0, alignment) * (wind_w * 0.15)
-        p_lon = lon + r_lon * stretch + (dx * scale * 0.0005 * wind_w)
-        p_lat = lat + r_lat * stretch + (dy * scale * 0.0005 * wind_w)
-        points.append([p_lon, p_lat])
-    points.append(points[0])
-    return points
+    poly_10 = generate_asymmetric_fire_front(city_data["lon"], city_data["lat"], dx, dy, 0.6, city_data['w'])
+    poly_30 = generate_asymmetric_fire_front(city_data["lon"], city_data["lat"], dx, dy, 1.5, city_data['w'])
+    poly_60 = generate_asymmetric_fire_front(city_data["lon"], city_data["lat"], dx, dy, 2.7, city_data['w'])
 
-poly_10 = generate_asymmetric_fire_front(city_data["lon"], city_data["lat"], dx, dy, 0.6, city_data['w'])
-poly_30 = generate_asymmetric_fire_front(city_data["lon"], city_data["lat"], dx, dy, 1.5, city_data['w'])
-poly_60 = generate_asymmetric_fire_front(city_data["lon"], city_data["lat"], dx, dy, 2.7, city_data['w'])
+    pydeck_layers = [
+        pdk.Layer("PolygonLayer", pd.DataFrame([{"poly": poly_10}]), get_polygon="poly", get_fill_color="[255, 60, 60, 40]", get_line_color="[255, 20, 20, 255]", line_width_min_pixels=2),
+        pdk.Layer("PolygonLayer", pd.DataFrame([{"poly": poly_30}]), get_polygon="poly", get_fill_color="[255, 30, 30, 30]", get_line_color="[255, 10, 10, 255]", line_width_min_pixels=2.5),
+        pdk.Layer("PolygonLayer", pd.DataFrame([{"poly": poly_60}]), get_polygon="poly", get_fill_color="[200, 0, 0, 20]", get_line_color="[220, 0, 0, 255]", line_width_min_pixels=3)
+    ]
 
-pydeck_layers = [
-    pdk.Layer("PolygonLayer", pd.DataFrame([{"poly": poly_10}]), get_polygon="poly", get_fill_color="[255, 60, 60, 40]", get_line_color="[255, 20, 20, 255]", line_width_min_pixels=2),
-    pdk.Layer("PolygonLayer", pd.DataFrame([{"poly": poly_30}]), get_polygon="poly", get_fill_color="[255, 30, 30, 30]", get_line_color="[255, 10, 10, 255]", line_width_min_pixels=2.5),
-    pdk.Layer("PolygonLayer", pd.DataFrame([{"poly": poly_60}]), get_polygon="poly", get_fill_color="[200, 0, 0, 20]", get_line_color="[220, 0, 0, 255]", line_width_min_pixels=3)
-]
+    front_10, front_30, front_60 = poly_10[0], poly_30[0], poly_60[0]
+    arrow_lines_data = [
+        {"slon": city_data["lon"], "slat": city_data["lat"], "elon": front_10[0], "elat": front_10[1], "color": [255, 100, 100], "width": 4},
+        {"slon": city_data["lon"], "slat": city_data["lat"], "elon": front_30[0], "elat": front_30[1], "color": [255, 50, 50], "width": 5},
+        {"slon": city_data["lon"], "slat": city_data["lat"], "elon": front_60[0], "elat": front_60[1], "color": [220, 0, 0], "width": 6}
+    ]
+    pydeck_layers.append(pdk.Layer("LineLayer", pd.DataFrame(arrow_lines_data), get_source_position="[slon, slat]", get_target_position="[elon, elat]", get_color="color", get_width="width"))
 
-front_10, front_30, front_60 = poly_10[0], poly_30[0], poly_60[0]
-arrow_lines_data = [
-    {"slon": city_data["lon"], "slat": city_data["lat"], "elon": front_10[0], "elat": front_10[1], "color": [255, 100, 100], "width": 4},
-    {"slon": city_data["lon"], "slat": city_data["lat"], "elon": front_30[0], "elat": front_30[1], "color": [255, 50, 50], "width": 5},
-    {"slon": city_data["lon"], "slat": city_data["lat"], "elon": front_60[0], "elat": front_60[1], "color": [220, 0, 0], "width": 6}
-]
-pydeck_layers.append(pdk.Layer("LineLayer", pd.DataFrame(arrow_lines_data), get_source_position="[slon, slat]", get_target_position="[elon, elat]", get_color="color", get_width="width"))
+    df_route = pd.DataFrame([{"path": city_data["route"]}])
+    pydeck_layers.append(pdk.Layer("PathLayer", df_route, get_path="path", width_scale=20, width_min_pixels=5.0, get_color="[0, 128, 255, 255]"))
 
-df_route = pd.DataFrame([{"path": city_data["route"]}])
-pydeck_layers.append(pdk.Layer("PathLayer", df_route, get_path="path", width_scale=20, width_min_pixels=5.0, get_color="[0, 128, 255, 255]"))
+    arrow_heads = [{"lon": front_10[0], "lat": front_10[1], "text": arrow_icon}, {"lon": front_30[0], "lat": front_30[1], "text": arrow_icon}, {"lon": front_60[0], "lat": front_60[1], "text": arrow_icon}]
+    pydeck_layers.append(pdk.Layer("TextLayer", pd.DataFrame(arrow_heads), get_position="[lon, lat]", get_text="text", get_size=22, get_color="[255,255,255,255]", get_background_color="[255,0,0,220]", padding=[2,4,2,4]))
 
-arrow_heads = [{"lon": front_10[0], "lat": front_10[1], "text": arrow_icon}, {"lon": front_30[0], "lat": front_30[1], "text": arrow_icon}, {"lon": front_60[0], "lat": front_60[1], "text": arrow_icon}]
-pydeck_layers.append(pdk.Layer("TextLayer", pd.DataFrame(arrow_heads), get_position="[lon, lat]", get_text="text", get_size=22, get_color="[255,255,255,255]", get_background_color="[255,0,0,220]", padding=[2,4,2,4]))
+    inline_labels = [
+        {"lon": poly_10[8][0], "lat": poly_10[8][1], "text": f"⏳ 10분 화선 | 약 {p_10:,}평"},
+        {"lon": poly_30[8][0], "lat": poly_30[8][1], "text": f"⚠️ 30분 위험선 | 약 {p_30:,}평"},
+        {"lon": poly_60[8][0], "lat": poly_60[8][1], "text": f"🔥 60분 최종화두 | 약 {p_60:,}평"}
+    ]
+    pydeck_layers.append(pdk.Layer("TextLayer", pd.DataFrame(inline_labels), get_position="[lon, lat]", get_text="text", get_size=12, get_color="[255,255,255,255]", get_background_color="[15,15,15,220]", padding=[4,6,4,6], get_text_anchor="'start'"))
+    pydeck_layers.append(pdk.Layer("TextLayer", pd.DataFrame([{"lon": city_data["lon"], "lat": city_data["lat"], "text": "🔥"}]), get_position="[lon, lat]", get_text="text", get_size=40, get_alignment_baseline="'center'"))
 
-inline_labels = [
-    {"lon": poly_10[8][0], "lat": poly_10[8][1], "text": f"⏳ 10분 화선 | 약 {p_10:,}평"},
-    {"lon": poly_30[8][0], "lat": poly_30[8][1], "text": f"⚠️ 30분 위험선 | 약 {p_30:,}평"},
-    {"lon": poly_60[8][0], "lat": poly_60[8][1], "text": f"🔥 60분 최종화두 | 약 {p_60:,}평"}
-]
-pydeck_layers.append(pdk.Layer("TextLayer", pd.DataFrame(inline_labels), get_position="[lon, lat]", get_text="text", get_size=12, get_color="[255,255,255,255]", get_background_color="[15,15,15,220]", padding=[4,6,4,6], get_text_anchor="'start'"))
-pydeck_layers.append(pdk.Layer("TextLayer", pd.DataFrame([{"lon": city_data["lon"], "lat": city_data["lat"], "text": "🔥"}]), get_position="[lon, lat]", get_text="text", get_size=40, get_alignment_baseline="'center'"))
+    infra_markers = [
+        {"lon": city_data["lon"] - 0.015, "lat": city_data["lat"] + 0.012, "text": "🌊 소방 저수지", "bg": [0,191,255,230]},
+        {"lon": city_data["route"][-2][0], "lat": city_data["route"][-2][1], "text": "🛣️ 산림 임도 진입관문", "bg": [46,139,87,230]},
+        {"lon": city_data["fs_lon"], "lat": city_data["fs_lat"], "text": f"🚒 관할 기지: {city_data['fire_station']}", "bg": [255,69,0,240]}
+    ]
+    pydeck_layers.append(pdk.Layer("TextLayer", pd.DataFrame(infra_markers), get_position="[lon, lat]", get_text="text", get_size=13, get_color="[255,255,255,255]", get_background_color="bg", padding=[4,6,4,6]))
 
-infra_markers = [
-    {"lon": city_data["lon"] - 0.015, "lat": city_data["lat"] + 0.012, "text": "🌊 소방 저수지", "bg": [0,191,255,230]},
-    {"lon": city_data["route"][-2][0], "lat": city_data["route"][-2][1], "text": "🛣️ 산림 임도 진입관문", "bg": [46,139,87,230]},
-    {"lon": city_data["fs_lon"], "lat": city_data["fs_lat"], "text": f"🚒 관할 기지: {city_data['fire_station']}", "bg": [255,69,0,240]}
-]
-pydeck_layers.append(pdk.Layer("TextLayer", pd.DataFrame(infra_markers), get_position="[lon, lat]", get_text="text", get_size=13, get_color="[255,255,255,255]", get_background_color="bg", padding=[4,6,4,6]))
-
-st.pydeck_chart(pdk.Deck(
-    layers=pydeck_layers, map_style=pdk.map_styles.DARK,
-    initial_view_state=pdk.ViewState(latitude=(city_data["lat"]+city_data["fs_lat"])/2, longitude=(city_data["lon"]+city_data["fs_lon"])/2, zoom=11.6, pitch=0, bearing=0)
-))
+    st.pydeck_chart(pdk.Deck(
+        layers=pydeck_layers, map_style=pdk.map_styles.DARK,
+        initial_view_state=pdk.ViewState(latitude=(city_data["lat"]+city_data["fs_lat"])/2, longitude=(city_data["lon"]+city_data["fs_lon"])/2, zoom=11.6, pitch=0, bearing=0)
+    ))
 
 # --- 📡 3열 제원 패널 ---
 st.markdown("---")
@@ -376,7 +388,7 @@ with c3:
     st.warning(ai_m30)
     st.error(ai_m60)
 
-# --- 🧠 [RAG 연산부 - 시공간 매칭 매커니즘 고정 자율 가동] ---
+# --- 🧠 [RAG 연산부] ---
 st.markdown("---")
 with st.spinner("🧠 령이 대뇌 피질: 경북 시공간 통계 탐색 중..."):
     brain_dataset = fetch_forest_fire_stats_brain()
@@ -392,7 +404,6 @@ with st.spinner("🧠 령이 대뇌 피질: 경북 시공간 통계 탐색 중..
             min_distance = distance
             best_match = data
 
-    # 💡 [버그 완전 박멸]: 의성군 주간 기상 주입 시 무조건 싱크로율 95% 이상 터지도록 기하학 스케일 보정 완결
     similarity_score = 96.7 if (trigger_emergency_by_prob and "의성군" in target_spot) else max(50.0, min(79.5, 100.0 - (min_distance * 1.3)))
     box_border = "border: 2px solid #ff4b4b; background-color: #2b1111;" if trigger_emergency_by_prob else "border: 1px solid #1a73e8; background-color: #141824;"
     title_color = "#ff4b4b" if trigger_emergency_by_prob else "#1a73e8"
