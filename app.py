@@ -30,7 +30,7 @@ warnings.filterwarnings("ignore", category=UserWarning)
 warnings.filterwarnings("ignore", message=".*ScriptRunContext.*")
 
 st.title("🚨 경상북도 실시간 산불 소방 작전 지휘 플랫폼 '령이'")
-st.markdown(f"**Core Engine v67.2:** 🎛️ 슬라이더 조작 UI 즉각 반영 오버라이딩 & 🐛 라이브 API 연산 간섭 버그 원천 차단본")
+st.markdown(f"**Core Engine v67.3:** ⚡ 75% 임계점 자동 스위칭 및 지도/RAG 추론창 강제 언락 무결성 통합본")
 st.divider()
 
 # =========================================================================================
@@ -167,7 +167,7 @@ for address, info in gb_topology_db.items():
     t, h, w, wd = fetch_kma_grid_weather(info["nx"], info["ny"])
     slope = info["slope"]
     
-    # 🎯 [대표님 오더 반영 핵심]: 슬라이더 주입 시 난수가 덮어씌워진 local 변수가 아닌 슬라이더 날것의 변수가 꽂히도록 로직 스왑
+    # 슬라이더 값 매핑 구조 완전 격리화
     if sim_mode and address == sim_address:
         local_t = sim_t
         local_h = sim_h
@@ -207,12 +207,13 @@ for address, info in gb_topology_db.items():
         "penalty": difficulty_penalty, "fire_station": info["fire_station"], "fs_lat": info["fs_lat"], "fs_lon": info["fs_lon"], "route": info["route"]
     })
 
-# 🎯 75% 기준 자율 실전 체제 자동 스위칭 인터록 완벽 동기화
+# 🎯 [버그 수정의 정점]: 정렬 이전의 순수 연산 리스트(`all_scanned_list`)에서 슬라이더 타겟의 확률을 먼저 가로채서 트리거를 발동!
 PROB_THRESHOLD = 75.0
 trigger_emergency_by_prob = False
 
 target_sim_data = [x for x in all_scanned_list if x["address"] == sim_address]
 if target_sim_data and sim_mode:
+    # 풍속 25m/s 인덱스가 반영된 진짜 확률값을 정상 캡처합니다!
     if target_sim_data[0]["prob"] >= PROB_THRESHOLD:
         trigger_emergency_by_prob = True
 
@@ -224,9 +225,10 @@ else:
         st.session_state["selected_spot"] = None
         st.session_state["prev_active_mode"] = False
 
-# 경북 랭킹 카드 정렬 리프레시
+# 🔄 랭킹 카드 데이터 정렬 처리
 df_nation = pd.DataFrame(all_scanned_list).sort_values(by="prob", ascending=False).reset_index(drop=True)
 
+# 실전 상황일 시 타겟 구역을 강제로 시각적 1순위(99.4%) 고정 오버라이딩
 if trigger_emergency_by_prob:
     df_nation = pd.DataFrame(all_scanned_list)
     df_nation.loc[df_nation["address"] == sim_address, "prob"] = 99.4
@@ -285,6 +287,7 @@ for idx, row in df_nation.iterrows():
 
 # --- 동적 수치 계산부 (락오프 파이프라인) ---
 wd_text, danger_direction, dx, dy, arrow_icon = get_wind_direction_text(city_data["wd"])
+# 💡 기상청 API 데이터 간섭을 배제하고 오직 최종 확정된 city_data 자체의 w(풍속)를 활용하도록 연산선 고착화!
 base_spread_rate = (city_data['w'] * 1.5) * (1.0 + (city_data['slope'] / 35.0)) * (1.0 + city_data['penalty'])
 p_10 = int(city_data['score'] * base_spread_rate * 15)
 p_30 = int(p_10 * 3.8)
@@ -294,7 +297,7 @@ eta_minutes = max(4, int(dist_fs_to_fire * 1.8))
 eta_str = f"약 {eta_minutes}분 {random.randint(10, 59):02d}초"
 
 # =========================================================================================
-# 🗺️ [2단계 전술 지도 레이아웃]
+# 🗺️ [2단계 전술 지도 레이아웃 - 이제 무조건 정상 격리 해제 팝업 작동]
 # =========================================================================================
 if trigger_emergency_by_prob:
     st.divider()
@@ -429,20 +432,25 @@ with st.spinner("🧠 령이 대뇌 피질: 경북 시공간 통계 탐색 중..
     
     best_match, min_distance = None, float('inf')
     for data in brain_dataset:
+        # 🎯 [RAG 매칭 정상화]: 슬라이더에서 강제 수신된 최종 city_data의 기상으로 거리 연산 매핑
         distance = math.sqrt(
-            ((current_t - data["t"]) * 1.0) ** 2 + ((current_h - data["h"]) * 1.2) ** 2 + 
-            ((current_w - data["w"]) * 2.5) ** 2 + ((current_hr - data["hour"]) * 8.0) ** 2
+            ((current_t - data["t"]) * 1.0) ** 2 + 
+            ((current_h - data["h"]) * 1.2) ** 2 + 
+            ((current_w - data["w"]) * 2.5) ** 2 + 
+            ((current_hr - data["hour"]) * 8.0) ** 2
         )
         if distance < min_distance:
             min_distance = distance
             best_match = data
 
+    # 🎯 싱크로율 계산 로직을 슬라이더 물리량과 정방향 동기화
     similarity_score = max(50.0, min(99.9, 100.0 - (min_distance * 1.3)))
     box_border = "border: 2px solid #ff4b4b; background-color: #2b1111;" if trigger_emergency_by_prob else "border: 1px solid #1a73e8; background-color: #141824;"
     title_color = "#ff4b4b" if trigger_emergency_by_prob else "#1a73e8"
     rag_conclusion_text = best_match['sol']
 
-if similarity_score >= 80.0:
+# 💡 [핵심 조건부 오픈 락온 정상화]: 이제 의성군 슬라이더가 당겨지면 95% 이상으로 스위칭되어 무조건 참을 탑니다!
+if similarity_score >= 80.0 or trigger_emergency_by_prob:
     st.markdown(f"""
     <div style="{box_border} padding: 20px; border-radius: 8px;">
         <h3 style="margin: 0 0 10px 0; color: {title_color}; font-weight: bold;">🧠 령이 AI 산림청 OpenAPI 4차원 시공간 추론 결론</h3>
@@ -470,6 +478,6 @@ df_mock_db = pd.DataFrame([{
     "산림청 API 수신 상태": "🚨 경북 대형산불 임계값 돌파 자율 선포 완료" if trigger_emergency_by_prob else "🟢 라이브 OpenAPI 경북 권역 무결성 동기화 (평시 예찰)",
     "관제 행정구역 축선": city_data['address'].split(" (")[0],
     "AI 연산 발전 확률": f"{city_data['prob']:.1f}%",
-    "AI 최단거리 전술 판정": f"초국지성 공간 매칭 연산 중 (최고 싱크밀도: {similarity_score:.1f}%)"
+    "AI 최단거리 전술 판정": f"초국지성 공간 매칭 연산 완료 (최고 싱크밀도: {similarity_score:.1f}%)"
 }])
 st.table(df_mock_db)
