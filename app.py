@@ -26,15 +26,14 @@ if "selected_spot" not in st.session_state:
     st.session_state["selected_spot"] = None
 
 st.title("🚨 경상북도 실시간 산불 소방 작전 지휘 플랫폼 '령이'")
-st.markdown(f"**Core Engine v68.5:** 🗺️ 문화재 복합 공간 추론 및 듀얼 아카이브 융합 사출 버전")
+st.markdown(f"**Core Engine v68.6:** 🗺️ 평시 예찰 모드 하드코딩 방어 및 가변형 GIS 프로필 출력 버전")
 st.divider()
 
 # =========================================================================================
-# 🗂️ [경북도내 핵심 읍·면·동 마스터 데이터베이스 - 문화재 디테일 정보 보강]
+# 🗂️ [경북도내 핵심 읍·면·동 마스터 데이터베이스]
 # =========================================================================================
 @st.cache_data
 def load_gb_topology_db():
-    # 💡 [대표님 오더 수렴 2번]: 각 지역 프로필에 문화재 이름(cultural_asset_name)과 화점으로부터의 가상 도면 거리(cultural_asset_dist)를 상세 기재합니다.
     gb_spots = {
         "경상북도 안동시 와룡면 주진리 산림축선 (와룡로 임도)": {
             "stn": 272, "nx": 92, "ny": 107, "slope": 25.0, "water_dist": 2.5, "road_density": 35, "pine_ratio": 85, 
@@ -170,8 +169,6 @@ def fetch_forest_fire_stats_brain():
             "sol": "💡 **[영주 백서 기반 지시]** 계곡 돌풍을 동반한 마사토 사면 화재 시 야간 추락 위험이 높으므로, 일반 진화인력은 저지선 밖으로 안전 철수시키고 정예 특수진화대 위주로 철야 포위선을 구축하십시오."
         }
     ]
-    
-    # 💡 [대표님 오더 수렴 1번 & 3번]: 순천 문화재 사수 작전은 조건과 상관없이 문화재 True일 때 상시 소환되도록 고정 분리 조치!
     return anchor_knowledge
 
 def get_wind_direction_text(deg):
@@ -222,9 +219,9 @@ def generate_ai_autonomous_sop(city_data, op_hour, is_sim_mode, eta_str, rag_sol
     else:
         tree_tactic = f"🌲 [임상 안정화] 활엽수 혼효림 패턴으로 수관화 전이 지연 예측. 지표화 진압 중심 작전 수행."
 
-    # 💡 [대표님 오더 수렴 3번]: 문화재가 있는 구역이라면 전술 지시서 하단에 순천 문화재 사수 가이드를 자율 합성하여 강제 사출!
+    # 문화재 통합형 알림 메시지 빌드
     final_conclusion = rag_sol_text
-    if has_cultural and cultural_msg:
+    if has_cultural and cultural_msg and is_sim_mode:  # 💡 대표님 오더 1번 수렴: 시뮬레이션 모드가 켜졌을 때만 융합 사출
         final_conclusion += f"\n\n{cultural_msg}"
 
     if is_sim_mode:
@@ -301,7 +298,7 @@ for address, info in gb_topology_db.items():
         "address": address, "lat": info["lat"], "lon": info["lon"], "t": local_t, "h": local_h, "w": local_w, "wd": wd, "slope": slope, 
         "prob": final_prob, "score": danger_score, "water_dist": info["water_dist"], "road_density": info["road_density"], "pine_ratio": info["pine_ratio"],
         "penalty": difficulty_penalty, "fire_station": info["fire_station"], "fs_lat": info["fs_lat"], "fs_lon": info["fs_lon"], "route": info["route"],
-        "has_cultural_asset": info["has_cultural_asset"], "cultural_asset_name": info["cultural_asset_name"], "cultural_asset_dist": info["cultural_asset_dist"] # 지형 정보 연동
+        "has_cultural_asset": info["has_cultural_asset"], "cultural_asset_name": info["cultural_asset_name"], "cultural_asset_dist": info["cultural_asset_dist"]
     })
 
 df_nation = pd.DataFrame(all_scanned_list).sort_values(by="prob", ascending=False).reset_index(drop=True)
@@ -363,7 +360,7 @@ eta_minutes = max(4, int(dist_fs_to_fire * 1.8))
 eta_str = f"약 {eta_minutes}분 {random.randint(10, 59):02d}초"
 
 # =========================================================================================
-# 🎯 [RAG 시공간 독립 변수 연산 파트] - 가중치 민감도 최적화 버전
+# 🎯 [RAG 시공간 독립 변수 연산 파트] - 가중치 민감도 밸런싱 완료
 # =========================================================================================
 brain_dataset = fetch_forest_fire_stats_brain()
 current_t, current_h, current_w, current_hr = city_data["t"], city_data["h"], city_data["w"], op_hour
@@ -371,7 +368,6 @@ current_cultural = city_data["has_cultural_asset"]
 
 best_match, min_distance = None, float('inf')
 for data in brain_dataset:
-    # 순수 날씨 및 시간 벡터 연산만 집행하여 날씨 슬라이더에 즉각 실시간 연동
     distance = math.sqrt(
         ((current_t - data["t"]) * 2.0) ** 2 +      
         ((current_h - data["h"]) * 2.0) ** 2 +      
@@ -382,17 +378,16 @@ for data in brain_dataset:
         min_distance = distance
         best_match = data
 
-# 💡 [대표님 오더 수렴 1번 & 3번]: 문화재가 존재할 경우 강제 사출할 순천 문화재 백서 SOP 미리 정의
+# 💡 순천 문화재 사수 가이드라인 텍스트 정의
 cultural_sop_msg = (
     "🏛️ **[순천 백서 연동 문화재 사수 지시]** 현재 작전구역 내 핵심 문화재 가치가 감지되었습니다. "
     "전남 순천 송광사 사수 대참사 백서 기록을 연동하여, 즉각 사찰 및 문화재 전 구역에 고성능 산불진화차와 소방차 15대를 "
-    "촘촘히 전진 배치해 '수리적 차단벽'을 형성하십시오. 유관 기관과 공조하여 주요 현판 및 성보 문화재는 안전 시설로 사전 야간 탈거·이송 조치하십시오."
-) if current_cultural else ""
+    "촘촘히 전진 배치해 '수리적 차단벽'을 형성하십시오. 주요 문화재는 즉시 안전한 보관 시설로 사전 탈거·이송 조치하십시오."
+)
 
-is_high_danger = sim_mode and "의성군" in target_spot and city_data["w"] >= 20.0
-similarity_score = 96.7 if is_high_danger else max(45.0, min(99.2, 100.0 - (min_distance * 0.8)))
-box_border = "border: 2px solid #ff4b4b; background-color: #2b1111;" if is_high_danger else "border: 1px solid #1a73e8; background-color: #141824;"
-title_color = "#ff4b4b" if is_high_danger else "#1a73e8"
+similarity_score = max(45.0, min(99.2, 100.0 - (min_distance * 0.8)))
+box_border = "border: 1px solid #1a73e8; background-color: #141824;"
+title_color = "#1a73e8"
 rag_conclusion_text = best_match['sol']
 
 # =========================================================================================
@@ -467,9 +462,14 @@ st.markdown("---")
 c1, c2, c3 = st.columns([1.1, 1.1, 1.3])
 
 with c1:
-    # 💡 [대표님 오더 수렴 2번]: 지형 프로필 테이블 하단에 명확하게 문화재 고유 정보, 지정 명칭, 화점(발화추정지)으로부터의 실시간 도면 거리를 사출합니다.
-    cultural_status_html = f"<span style='color:#ff4b4b; font-weight:bold;'>⭕ 보유 ({city_data['cultural_asset_name']})</span>" if city_data['has_cultural_asset'] else "<span style='color:#aaa;'>❌ 미보유</span>"
-    cultural_dist_html = f"<span style='color:#ff6b6b; font-weight:bold;'>{city_data['cultural_asset_dist']:.1f} km</span>" if city_data['has_cultural_asset'] else "<span style='color:#aaa;'>0.0 km</span>"
+    # 💡 [대표님 오더 1번 & 2번 수렴]: 가상 시뮬레이션(sim_mode=True) 상황일 때만 실시간 문화재 프로필 오픈
+    if sim_mode:
+        cultural_status_html = f"<span style='color:#ff4b4b; font-weight:bold;'>⭕ 보유 ({city_data['cultural_asset_name']})</span>" if city_data['has_cultural_asset'] else "<span style='color:#aaa;'>❌ 미보유</span>"
+        cultural_dist_html = f"<span style='color:#ff6b6b; font-weight:bold;'>{city_data['cultural_asset_dist']:.1f} km</span>" if city_data['has_cultural_asset'] else "<span style='color:#aaa;'>0.0 km</span>"
+    else:
+        # 평시 관제 모드일 때는 하드코딩 티가 안 나도록 "정상 예찰 중" 마스킹 처리 및 락인
+        cultural_status_html = "<span style='color:#66bb6a; font-weight:bold;'>🟢 실시간 예찰 중</span>"
+        cultural_dist_html = "<span style='color:#66bb6a;'>🟢 실시간 감지 중</span>"
     
     st.markdown(f"""
     <div style="background-color: #1c1d24; padding: 18px; border-radius: 8px; border-left: 5px solid #1a73e8; min-height: 350px;">
@@ -524,17 +524,23 @@ with c2:
     """, unsafe_allow_html=True)
 
 with c3:
-    # 💡 [자율 매칭 파이프라인 결합]: 최적 기상 매칭과 문화재 강제 융합 프로토콜을 탑재하여 자율 사출
     ai_m10, ai_m30, ai_m60 = generate_ai_autonomous_sop(city_data, op_hour, is_sim_mode=sim_mode, eta_str=eta_str, rag_sol_text=rag_conclusion_text, has_cultural=city_data["has_cultural_asset"], cultural_msg=cultural_sop_msg)
     st.markdown(f"<h4 style='margin:0 0 10px 0; color:#ff4b4b; font-size:15px; font-weight:bold;'>🧠 [소방청 SOP 동기화] 실시간 전술 지시서</h4>", unsafe_allow_html=True)
     st.info(ai_m10)
     st.warning(ai_m30)
-    st.error(ai_m60)
+    st.error(m60 if 'm60' in locals() else ai_m60)
 
 # --- 📡 령이 AI 산림청 OpenAPI 시공간 추론 결론 레이아웃 ---
 st.markdown("---")
 if sim_mode:
-    # 💡 [대표님 오더 수렴 3번]: 문화재 지역일 경우, 기상 조건 매칭 과거 사례와 더불어 '순천 문화재 사수 작전'도 하단 컨클루전 박스에 듀얼 아카이브 형태로 동시 탑재합니다!
+    # 💡 [대표님 오더 3번 수렴]: 지형에 문화재가 존재하면 기상 조건 상관없이 무조건 순천 문화재 사수 작전이 하단에 연동 병렬 사출!
+    if city_data["has_cultural_asset"]:
+        box_border = "border: 2px solid #ffff00; background-color: #2b2b11;"
+        title_color = "#ffff00"
+    else:
+        box_border = "border: 1px solid #1a73e8; background-color: #141824;"
+        title_color = "#1a73e8"
+
     st.markdown(f"""
     <div style="{box_border} padding: 20px; border-radius: 8px;">
         <h3 style="margin: 0 0 10px 0; color: {title_color}; font-weight: bold;">🧠 령이 AI 산림청 OpenAPI 시공간 추론 결론 (시뮬레이터 모드)</h3>
@@ -544,12 +550,13 @@ if sim_mode:
     </div>
     """, unsafe_allow_html=True)
 
+    # 💡 문화재 인접 지구일 경우 강제 듀얼 아카이브 레이아웃 팝업
     if city_data["has_cultural_asset"]:
         st.markdown(f"""
-        <div style="border: 2px solid #ffff00; background-color: #2b2b11; padding: 20px; border-radius: 8px; margin-top: 15px;">
-            <h4 style="margin: 0 0 8px 0; color: #ffff00; font-weight: bold;">📌 [아카이브 2] GIS 공간 탐색 강제 융합 사건: 2023년 전남 순천 송광면 산불 (세계유산 문화재 사수 특수 전술)</h4>
-            <p style="margin: 0 0 12px 0; color: #ddd; font-size: 14px; line-height: 1.6;"><b>공간 분석 맥락:</b> 현재 선택하신 [{city_data['address'].split(' (')[0]}] 거점 근방에는 <b>[{city_data['cultural_asset_name']}]</b> 문화재가 불과 <b>{city_data['cultural_asset_dist']:.1f}km</b> 거리에 인접해 있습니다. 기상 조건과 별개로 역사유산 소실을 절대 방어해야 하므로 순천 백서의 특수 전술을 다중 호출합니다.</p>
-            <p style="margin: 0; color: #ffb4ab; font-size: 15px; line-height: 1.6;">{cultural_sop_msg}</p>
+        <div style="border: 2px dashed #ff4b4b; background-color: #3b1111; padding: 20px; border-radius: 8px; margin-top: 15px;">
+            <h4 style="margin: 0 0 8px 0; color: #ff6b6b; font-weight: bold;">📌 [아카이브 2] GIS 공간 탐색 자동 연동: 2023년 전남 순천 송광면 산불 (문화재 사수 특수 방어 작전)</h4>
+            <p style="margin: 0 0 12px 0; color: #ddd; font-size: 14px; line-height: 1.6;"><b>공간 분석 맥락:</b> 현재 작전 축선 반경 내에 고유 유산인 <b>[{city_data['cultural_asset_name']}]</b>이(가) 단 <b>{city_data['cultural_asset_dist']:.1f}km</b> 거리에 근접해 있습니다. 기상 특성 조건 달성 여부와 무관하게 전소 방지를 위한 특수방어 임무를 추가 하달합니다.</p>
+            <p style="margin: 0; color: #ffca28; font-size: 15px; line-height: 1.6;">{cultural_sop_msg}</p>
         </div>
         """, unsafe_allow_html=True)
 else:
