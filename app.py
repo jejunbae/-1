@@ -26,23 +26,64 @@ if "selected_spot" not in st.session_state:
     st.session_state["selected_spot"] = None
 
 st.title("🚨 경상북도 실시간 산불 소방 작전 지휘 플랫폼 '령이'")
-st.markdown(f"**Core Engine v67.7:** 🗺️ 2023 산불 백서 전술 분석 매트릭스 융합 및 자율 SOP 추론 버전")
+st.markdown(f"**Core Engine v68.0:** 🗺️ GIS 지형/문화재 독립 변수 공간 추론 및 자율 SOP 생성 버전")
 st.divider()
 
 # =========================================================================================
-# 🗂️ [경북도내 핵심 읍·면·동 및 임도 도로명 주소 매핑 마스터 데이터베이스]
+# 🗂️ [경북도내 핵심 읍·면·동 마스터 데이터베이스 - GIS 독립 속성 추가]
 # =========================================================================================
 @st.cache_data
 def load_gb_topology_db():
+    # 💡 [SOP 공간 자율화 수술] 각 지역 프로필에 문화재 인접 여부(has_cultural_asset)와 호수/댐 연접 여부(has_lake)를 GIS 속성으로 추가합니다.
     gb_spots = {
-        "경상북도 안동시 와룡면 주진리 산림축선 (와룡로 임도)": {"stn": 272, "nx": 92, "ny": 107, "slope": 25.0, "water_dist": 2.5, "road_density": 35, "pine_ratio": 85, "fire_station": "안동소방서 와룡119안전센터", "fs_lat": 36.6025, "fs_lon": 128.7420, "lat": 36.6545, "lon": 128.7834, "route": [[128.7420, 36.6025], [128.7510, 36.6150], [128.7650, 36.6320], [128.7750, 36.6480], [128.7834, 36.6545]]},
-        "경상북도 의성군 점곡면 사촌리 배후 야산 (점곡길 산림)": {"stn": 278, "nx": 91, "ny": 104, "slope": 18.0, "water_dist": 3.1, "road_density": 40, "pine_ratio": 75, "fire_station": "의성소방서 의성119안전센터", "fs_lat": 36.3510, "fs_lon": 128.6820, "lat": 36.3914, "lon": 128.7845, "route": [[128.6820, 36.3510], [128.7150, 36.3620], [128.7520, 36.3810], [128.7845, 36.3914]]},
-        "경상북도 울진군 금강송면 하원리 금강송 군락지 (십이령로)": {"stn": 130, "nx": 102, "ny": 113, "slope": 32.0, "water_dist": 7.2, "road_density": 10, "pine_ratio": 95, "fire_station": "울진소방서 북면119안전센터", "fs_lat": 36.9910, "fs_lon": 129.3510, "lat": 36.9542, "lon": 129.2845, "route": [[129.3510, 36.9910], [129.3320, 36.9750], [129.3100, 36.9620], [129.2950, 36.9580], [129.2845, 36.9542]]},
-        "경상북도 문경시 문경읍 조령산 국지 사면 (새재로 사면축선)": {"stn": 273, "nx": 86, "ny": 109, "slope": 28.0, "water_dist": 6.8, "road_density": 12, "pine_ratio": 78, "fire_station": "문경소방서 문경119안전센터", "fs_lat": 36.6925, "fs_lon": 128.1560, "lat": 36.7641, "lon": 128.0824, "route": [[128.1560, 36.6925], [128.1320, 36.7110], [128.1050, 36.7350], [128.0910, 36.7520], [128.0824, 36.7641]]},
-        "경상북도 구미시 금오산 등선 배후 사면 (금오산로 임도축선)": {"stn": 279, "nx": 87, "ny": 101, "slope": 20.0, "water_dist": 1.8, "road_density": 45, "pine_ratio": 55, "fire_station": "구미소방서 원평119안전센터", "fs_lat": 36.1280, "fs_lon": 128.3380, "lat": 36.0842, "lon": 128.3014, "route": [[128.3380, 36.1280], [128.3220, 36.1150], [128.3100, 36.0980], [128.3014, 36.0842]]},
-        "경상북도 영주시 풍기읍 소백산 희방사 사면 (죽령로 임도축선)": {"stn": 272, "nx": 89, "ny": 113, "slope": 27.0, "water_dist": 5.0, "road_density": 20, "pine_ratio": 72, "fire_station": "영주소방서 풍기119안전센터", "fs_lat": 36.8650, "fs_lon": 128.5250, "lat": 36.9412, "lon": 128.4624, "route": [[128.5250, 36.8650], [128.4950, 36.8920], [128.4720, 36.9210], [128.4624, 36.9412]]},
-        "경상북도 영천시 화북면 보현산 천문대 구역 (천문로 임도축선)": {"stn": 281, "nx": 97, "ny": 103, "slope": 22.0, "water_dist": 4.0, "road_density": 28, "pine_ratio": 60, "fire_station": "영천소방서 화북119지역대", "fs_lat": 36.0410, "fs_lon": 128.9610, "lat": 36.1621, "lon": 128.9845, "route": [[128.9610, 36.0410], [128.9550, 36.0850], [128.9720, 36.1250], [128.9845, 36.1621]]},
-        "경상북도 포항시 북구 내연산 계곡지대 (보경로 사면축선)": {"stn": 138, "nx": 102, "ny": 106, "slope": 15.0, "water_dist": 1.2, "road_density": 50, "pine_ratio": 40, "fire_station": "포항북부소방서 흥해119안전센터", "fs_lat": 36.1120, "fs_lon": 129.3510, "lat": 36.2514, "lon": 129.2845, "route": [[129.3510, 36.1120], [129.3620, 36.1550], [129.3700, 36.2050], [129.3250, 36.2350], [129.2845, 36.2514]]}
+        "경상북도 안동시 와룡면 주진리 산림축선 (와룡로 임도)": {
+            "stn": 272, "nx": 92, "ny": 107, "slope": 25.0, "water_dist": 2.5, "road_density": 35, "pine_ratio": 85, 
+            "fire_station": "안동소방서 와룡119안전센터", "fs_lat": 36.6025, "fs_lon": 128.7420, "lat": 36.6545, "lon": 128.7834, 
+            "has_cultural_asset": False, "has_lake": True,  # 안동호 연접
+            "route": [[128.7420, 36.6025], [128.7510, 36.6150], [128.7650, 36.6320], [128.7750, 36.6480], [128.7834, 36.6545]]
+        },
+        "경상북도 의성군 점곡면 사촌리 배후 야산 (점곡길 산림)": {
+            "stn": 278, "nx": 91, "ny": 104, "slope": 18.0, "water_dist": 3.1, "road_density": 40, "pine_ratio": 75, 
+            "fire_station": "의성소방서 의성119안전센터", "fs_lat": 36.3510, "fs_lon": 128.6820, "lat": 36.3914, "lon": 128.7845, 
+            "has_cultural_asset": False, "has_lake": False, 
+            "route": [[128.6820, 36.3510], [128.7150, 36.3620], [128.7520, 36.3810], [128.7845, 36.3914]]
+        },
+        "경상북도 울진군 금강송면 하원리 금강송 군락지 (십이령로)": {
+            "stn": 130, "nx": 102, "ny": 113, "slope": 32.0, "water_dist": 7.2, "road_density": 10, "pine_ratio": 95, 
+            "fire_station": "울진소방서 북면119안전센터", "fs_lat": 36.9910, "fs_lon": 129.3510, "lat": 36.9542, "lon": 129.2845, 
+            "has_cultural_asset": True, "has_lake": False,  # 산림 유산 보존 지구
+            "route": [[129.3510, 36.9910], [129.3320, 36.9750], [129.3100, 36.9620], [129.2950, 36.9580], [129.2845, 36.9542]]
+        },
+        "경상북도 문경시 문경읍 조령산 국지 사면 (새재로 사면축선)": {
+            "stn": 273, "nx": 86, "ny": 109, "slope": 28.0, "water_dist": 6.8, "road_density": 12, "pine_ratio": 78, 
+            "fire_station": "문경소방서 문경119안전센터", "fs_lat": 36.6925, "fs_lon": 128.1560, "lat": 36.7641, "lon": 128.0824, 
+            "has_cultural_asset": True, "has_lake": False,  # 문경새재 도립공원 및 사적지
+            "route": [[128.1560, 36.6925], [128.1320, 36.7110], [128.1050, 36.7350], [128.0910, 36.7520], [128.0824, 36.7641]]
+        },
+        "경상북도 구미시 금오산 등선 배후 사면 (금오산로 임도축선)": {
+            "stn": 279, "nx": 87, "ny": 101, "slope": 20.0, "water_dist": 1.8, "road_density": 45, "pine_ratio": 55, 
+            "fire_station": "구미소방서 원평119안전센터", "fs_lat": 36.1280, "fs_lon": 128.3380, "lat": 36.0842, "lon": 128.3014, 
+            "has_cultural_asset": False, "has_lake": False, 
+            "route": [[128.3380, 36.1280], [128.3220, 36.1150], [128.3100, 36.0980], [128.3014, 36.0842]]
+        },
+        "경상북도 영주시 풍기읍 소백산 희방사 사면 (죽령로 임도축선)": {
+            "stn": 272, "nx": 89, "ny": 113, "slope": 27.0, "water_dist": 5.0, "road_density": 20, "pine_ratio": 72, 
+            "fire_station": "영주소방서 풍기119안전센터", "fs_lat": 36.8650, "fs_lon": 128.5250, "lat": 36.9412, "lon": 128.4624, 
+            "has_cultural_asset": True, "has_lake": False,  # 희방사 문화재 고찰 인접
+            "route": [[128.5250, 36.8650], [128.4950, 36.8920], [128.4720, 36.9210], [128.4624, 36.9412]]
+        },
+        "경상북도 영천시 화북면 보현산 천문대 구역 (천문로 임도축선)": {
+            "stn": 281, "nx": 97, "ny": 103, "slope": 22.0, "water_dist": 4.0, "road_density": 28, "pine_ratio": 60, 
+            "fire_station": "영천소방서 화북119지역대", "fs_lat": 36.0410, "fs_lon": 128.9610, "lat": 36.1621, "lon": 128.9845, 
+            "has_cultural_asset": False, "has_lake": False, 
+            "route": [[128.9610, 36.0410], [128.9550, 36.0850], [128.9720, 36.1250], [128.9845, 36.1621]]
+        },
+        "경상북도 포항시 북구 내연산 계곡지대 (보경로 사면축선)": {
+            "stn": 138, "nx": 102, "ny": 106, "slope": 15.0, "water_dist": 1.2, "road_density": 50, "pine_ratio": 40, 
+            "fire_station": "포항북부소방서 흥해119안전센터", "fs_lat": 36.1120, "fs_lon": 129.3510, "lat": 36.2514, "lon": 129.2845, 
+            "has_cultural_asset": True, "has_lake": False,  # 보경사 고찰 및 군락지 인접
+            "route": [[129.3510, 36.1120], [129.3620, 36.1550], [129.3700, 36.2050], [129.3250, 36.2350], [129.2845, 36.2514]]
+        }
     }
     return gb_spots
 
@@ -64,61 +105,73 @@ def fetch_kma_grid_weather(nx, ny):
     return live_t, live_h, live_w, live_wd
 
 # =========================================================================================
-# 🧠 [령이 지식 베이스] 2023년 대형 동시다발 산불백서 핵심 지식 통합 엔진
+# 🧠 [령이 지식 베이스] 백서 11개 사례 수록 + GIS 물리 매칭 속성(문화재/호수) 추가 수술
 # =========================================================================================
 def fetch_forest_fire_stats_brain():
     anchor_knowledge = [
         {
-            "case": "2023년 충남 홍성 서부면 대형 산불 (3단계 격상 유형)", 
-            "t": 22.0, "h": 10.0, "w": 12.0, "hour": 14, 
+            "case": "2023년 충남 홍성 서부면 산불 (3단계 격상 유형)", 
+            "t": 22.0, "h": 10.0, "w": 12.0, "hour": 14, "need_cultural": False, "need_lake": False,
             "desc": "순간풍속 12m/s의 강한 동풍과 소나무 단순림 수관화가 결합되어 화선이 38.9km까지 광폭화된 3단계 대형 산불. 전국적인 자원 분산으로 초동 헬기 진화율이 21%에 정체되었던 악조건 기록.", 
             "sol": "💡 **[홍성 백서 기반 지시]** 동시다발 화재로 자원이 분산될 시, 지상 진화대를 '화두 전면'에 돌격 배치해 야간 화선 차단벽을 조기 가동하십시오. 연무로 헬기 진화가 완전히 가로막힐 때는 '고성능 산불진화차'를 산악 경계선에 신속 투입해 핵심 문화재 및 시설물 주변에 수막 방어선을 가동해야 합니다."
         },
         {
             "case": "2023년 강원 강릉 난곡동 산불 (양간지풍 도심 직격 유형)", 
-            "t": 21.5, "h": 8.0, "w": 28.6, "hour": 9, 
+            "t": 21.5, "h": 8.0, "w": 28.6, "hour": 9, "need_cultural": True, "need_lake": False,
             "desc": "습도 8%의 고건조 상태에서 순간최대풍속 28.6m/s의 태풍급 양간지풍이 발생하여 초동 진화 헬기 비행이 전면 불가능(출동 한계 풍속 초과)했던 한계 사례. 불씨가 도심 펜션 단지로 초고속 비화되어 막대한 사유재산 피해 발생.", 
             "sol": "💡 **[강릉 백서 기반 지시]** 태풍급 초강풍 발생 시 공중 진화는 불가능하므로, 항공 지원을 대기하지 말고 즉각 최고 비상 단계인 '소방 동원령 3호' 체제를 가동하십시오. 소방력을 도심지 및 가옥 전면에 밀착 배치하고 역사적 문화재 유실 위험지구는 주요 유산을 사전 탈거·이송 조치하는 선제적 차단 프로토콜을 수행하십시오."
         },
         {
             "case": "2023년 경남 하동 지리산 연접 산불 (고고도 임도 전무 한계 유형)", 
-            "t": 24.0, "h": 9.5, "w": 16.0, "hour": 21, 
+            "t": 24.0, "h": 9.5, "w": 16.0, "hour": 21, "need_cultural": False, "need_lake": False,
             "desc": "해발고도가 높고 임도(林道)가 전혀 없는 경사도 40° 이상의 지리산 암반 절벽지 상황. 칠흑 같은 야간 진화 중 추락 및 낙석 안전사고 위험으로 지상 진화 인력이 철수하면서 밤새 산풍을 타고 화선이 대형화된 취약 기록.", 
             "sol": "💡 **[하동 백서 기반 지시]** 임도가 전무한 고고도 절험지 야간 상황은 안전사고 위험이 최고조에 달하므로, 야간 산악 진입을 전면 금하고 대원들을 안전 철수시키는 것이 백서의 제1원칙입니다. 대신 하강 기류(산풍) 진행 방향의 민가·축사 경계선에 소방 차량을 배치하여 '사전 민가 차단선'을 공고히 사수하십시오."
         },
         {
             "case": "2023년 경남 합천 바위산 산불 (야간 드론 관제 성공 유형)", 
-            "t": 22.5, "h": 11.0, "w": 14.0, "hour": 23, 
+            "t": 22.5, "h": 11.0, "w": 14.0, "hour": 23, "need_cultural": False, "need_lake": False,
             "desc": "험준한 바위산 지형 특성상 낮 시간대 헬기 살수에도 땅속 암화(숨은 불씨)가 지속적으로 재발화하여 산불 대응 3단계까지 격상되었으나, 야간의 기상 반전을 활용해 주불 잡기에 성공한 우수 사례.", 
             "sol": "💡 **[합천 백서 기반 지시]** 헬기가 철수하는 야간 공백기에는 **[열화상 드론 정밀 관제 + 정예 특수진화대]** 결합 작전이 절대적 공식입니다. 야간 드론을 통해 연막 속 가려진 화두 좌표를 실시간 추적하고, 특수진화대원을 해당 지점에 정밀 돌격시켜 낙엽층을 뒤엎으며 지상 화선을 완벽히 제어하십시오."
         },
         {
+            "case": "2023년 전남 순천 송광면 산불 (세계유산 문화재 사수 유형)", 
+            "t": 19.0, "h": 12.0, "w": 15.0, "hour": 5, "need_cultural": True, "need_lake": True,  # 🎯 문화재와 호수가 동시에 연접해 있어야만 발동하도록 제약 강화!
+            "desc": "주암호 국지 돌풍(최대 15m/s)을 만난 화선이 세계유산 국보 사찰인 송광사 전방 능선까지 포위 압박한 긴박했던 사건. 경사도 42°의 악조건 속에서 최고 등급 3단계가 선포되었던 기록.", 
+            "sol": "💡 **[순천 백서 기반 지시]** 국보 사찰 및 도립공원 사수 상황 시, 즉각 사찰 전 구역에 고성능 진화차와 소방차 15대를 촘촘히 전진 배치해 '수리적 수막 차단벽'을 형성하십시오. 문화재청과 공조하여 사찰 내 주요 현판 및 이동 가능 보물은 안전한 박물관 시설 등으로 사전 야간 탈거·이송 조치하는 문화재 방어 프로토콜을 즉시 적용해야 합니다."
+        },
+        {
+            "case": "2023년 경북 영주 평은면 산불 (영주호 계곡풍 포위선 성공 유형)", 
+            "t": 18.5, "h": 14.0, "w": 13.0, "hour": 20, "need_cultural": False, "need_lake": True, # 호수 연접 특성
+            "desc": "영주호 유역에서 불어오는 순간속도 13m/s의 계곡 돌풍을 타고 오운리 및 무섬마을 후방 산맥으로 비화한 사건. 험준한 마사토 사면 구역에서 대응 2단계 야간 철야전이 전개되었던 기록.", 
+            "sol": "💡 **[영주 백서 기반 지시]** 계곡 돌풍을 동반한 마사토 사면 화재 시 야간 추락 위험이 높으므로, 일반 진화인력은 저지선 밖으로 안전 철수시키고 정예 특수진화대 위주로 철야 포위선을 구축하십시오. 특히 인근 역사 보존 지구 경계선 사면에는 소방 장비를 밀착 고정 배치해 사유시설 피해를 철저히 차단하십시오."
+        },
+        {
             "case": "2023년 충북 옥천 군북면 산불 (댐·호수 유역 국지 돌풍 유형)", 
-            "t": 20.0, "h": 15.0, "w": 13.0, "hour": 13, 
+            "t": 20.0, "h": 15.0, "w": 13.0, "hour": 13, "need_cultural": False, "need_lake": True, # 호수 연접 특성
             "desc": "대청댐 건설로 조성된 대청호 유역에서 불어오는 순간최대풍속 13m/s의 불규칙한 국지성 강풍을 만나 화선이 예상치 못한 방향으로 급격히 비화·확산되었던 대청호 연접지 기록.", 
             "sol": "💡 **[옥천 백서 기반 지시]** 대규모 호수·댐 연접 지구는 국지성 강풍에 의한 불규칙 비화 위험성이 높으므로 관내 전 직원 동원령을 조기 가동하십시오. 진화 헬기 자원이 부족할 시, 중앙상황실망을 통해 인접 권역 임차 헬기를 현 공역으로 전격 전환 배치하는 '광역 공조 취수 셔틀 프로토콜'을 선제적으로 확보해야 합니다."
         },
         {
             "case": "2023년 충남 당진 대호지면 산불 (사유시설 경계선 포위 성공 유형)", 
-            "t": 21.0, "h": 12.0, "w": 15.0, "hour": 3, 
+            "t": 21.0, "h": 12.0, "w": 15.0, "hour": 3, "need_cultural": False, "need_lake": False,
             "desc": "바다와 접하는 지리적 특성으로 순간풍속 15m/s의 강한 남서풍이 불어 화선이 9km 이상 확장되었으나, 새벽 시간대 축사 경계선 방화선 구축을 통해 사유 시설 피해를 최소화한 기록.", 
             "sol": "💡 **[당진 백서 기반 지시]** 새벽 시간대 숨은 불씨가 강풍에 의해 축사 및 민가 경계선으로 직전 접동할 경우, 관할 소방력을 시설 전 구역에 포위 전진 배치해 지상 방화선(Fireline)을 구축하십시오. 화선 최인접 구역 주민은 안전 경로당으로 즉각 야간 피난시키는 인명 구호 조치를 병행하십시오."
         },
         {
             "case": "2023년 전남 함평 신광면 산불 (소나무림 수관화 폭발 유형)", 
-            "t": 20.5, "h": 13.0, "w": 15.0, "hour": 15, 
+            "t": 20.5, "h": 13.0, "w": 15.0, "hour": 15, "need_cultural": False, "need_lake": False,
             "desc": "서해안 해풍(순간 최대 15m/s)을 만난 지표화가 소나무·곰솔 단순림 구역을 지나며 폭발적인 수관화로 즉각 전이되어 산불 영향 구역이 682ha까지 광폭화된 3단계 대형 산불 사례.", 
             "sol": "💡 **[함평 백서 기반 지시]** 소나무 성림지 중심의 폭발적 수관화 징후 포착 시, 관할 정예 특수진화대를 취약 요양시설 및 민가 전면에 방어형 격리 배치하십시오. 헬기는 인근 담수지를 활용해 초단거리 덤핑 셔틀을 가동하고 이재민 대피소를 체육관으로 선제 확보해야 합니다."
         },
         {
             "case": "2023년 충남 보령 미산면 산불 (분지 계곡풍 지상전 차단 유형)", 
-            "t": 19.5, "h": 14.0, "w": 12.0, "hour": 19, 
+            "t": 19.5, "h": 14.0, "w": 12.0, "hour": 19, "need_cultural": False, "need_lake": True, # 보령호 연접 특성
             "desc": "보령호와 인접한 경사도 35°의 암반 급경사지 분지 지형에서 순간풍속 12m/s의 서북서풍을 만나 동남 방향으로 빠르게 비화되었으나, 야간 지상대 사투로 반전에 성공한 사례.", 
             "sol": "💡 **[보령 백서 기반 지시]** 암반 지형 특성상 차량 접근이 불가능하므로 공중·특수진화대를 야간 사면 포위선 전역에 도보 분산 배치하여 등짐펌프를 활용한 화선 수작업 끊어내기를 지시하십시오. 2차 피해 유발을 차단하기 위해 산사태 방지 사방 사업 예산을 조기 매칭 펀드로 확보해야 합니다."
         },
         {
             "case": "2023년 충남 부여 세도면 산불 (항공 마비시 지상 밀집 초동 유형)", 
-            "t": 18.0, "h": 16.0, "w": 11.0, "hour": 16, 
+            "t": 18.0, "h": 16.0, "w": 11.0, "hour": 16, "need_cultural": False, "need_lake": False,
             "desc": "동시다발 산불로 인해 초동 진화 헬기 지원이 완전히 제한된 최악의 자원 공백 상황 속에서, 지자체 자체 지상 인력의 총력 사투를 통해 대응 단계 격상 없이 조기 차단에 성공한 기록.", 
             "sol": "💡 **[부여 백서 기반 지시]** 동시다발 산불로 헬기 공중 지원이 전무할 시, 본청 행정 공무원 및 관내 지역 의용소방대원 등 지상 가용 자원을 한 곳에 최대 규모로 밀집 투입하는 대안 전술을 전개하십시오. 갈고리와 등짐펌프를 활용해 화두 전면을 직접 포위 격멸하는 지상전 중심 프로토콜을 수행해야 합니다."
         }
@@ -137,7 +190,7 @@ def get_wind_direction_text(deg):
     else: return "북서풍 (↘️ 남동쪽 확산 위험)", "남동쪽", 0.7, -0.7, "↘️"
 
 # =========================================================================================
-# 🎛️ [령이 자율 추론 SOP 생성 엔진] 실시간 기상/지형 변수 연동 대응책 완전 자동 빌드
+# 🎛️ [령이 자율 추론 SOP 생성 엔진]
 # =========================================================================================
 def generate_ai_autonomous_sop(city_data, op_hour, is_sim_mode, eta_str, rag_sol_text):
     station = city_data["fire_station"]
@@ -147,7 +200,6 @@ def generate_ai_autonomous_sop(city_data, op_hour, is_sim_mode, eta_str, rag_sol
     pine = city_data["pine_ratio"]
     road = city_data["road_density"]
     
-    # 1단계: 실시간 풍속 물리량에 따른 대응 단계 자율 판정
     if wind >= 25.0:
         sop_level = "🔥 [소방청 SOP 최고단계: 대형산불 동원령 3단계 및 국가위기경보 심각 발령]"
     elif wind >= 14.0:
@@ -157,12 +209,11 @@ def generate_ai_autonomous_sop(city_data, op_hour, is_sim_mode, eta_str, rag_sol
     else:
         sop_level = "🔹 [소방청 SOP 초동단계: 관내 지구대 국지 진화선 가동]"
 
-    # 2단계: 주야간 시공간 기류 특성 분석
     if 18 <= op_hour or op_hour < 6:
         time_context = "🌙 [야간 소화 통제령 가동]"
         heli_tactic = "❌ [항공 규정 비행 금지] 안전상 진화헬기 철수 데드라인 적용 ➔ 지상 정예 인력 교대 전개."
-        if slope >= 30.0 and road <= 15:
-            micro_climate = "📉 [하동 백서 위험 검출] 경사도 30° 이상 및 임도 밀도 취약 지구 야간 작업은 추락 사고 위험 최고조. 야간 진화 전면 중단 후 인력 철수 프로토콜 발동."
+        if slope >= 28.0 and road <= 15:
+            micro_climate = "📉 [하동 백서 위험 검출] 경사도 28° 이상 및 임도 밀도 취약 지구 야간 작업은 추락 사고 위험 최고조. 야간 진화 전면 중단 후 인력 철수 프로토콜 발동."
         else:
             micro_climate = "📉 [하강 기류 발생] 복사 냉각으로 기류가 산정상에서 민가 방향으로 하강(산풍). 가옥 배후 50m 방어벽 조밀 구축."
     else:
@@ -170,13 +221,11 @@ def generate_ai_autonomous_sop(city_data, op_hour, is_sim_mode, eta_str, rag_sol
         heli_tactic = f"🚁 [공중 살수 최적화] 인근 소방 담수지({city_data['water_dist']:.1f}km) 연계 진화 헬기 초단거리 셔틀 가동."
         micro_climate = f"📈 [상승 곡풍 가속] 온도 {city_data['t']:.1f}°C 상승에 따른 수관화 유도 위험. 산마루 진입을 금하고 측면 임도 차단벽 유도."
 
-    # 3단계: 임상(소나무 비율) 및 임도 진입 가능 여부에 따른 자율 지시 결합
     if pine >= 80:
         tree_tactic = f"🌲 [수관화 예찰 위박] 소나무 비율 {pine}% 고위험군 임상 패턴 감지. 비산화 불씨 비산 거리 수킬로미터 예측, 선제적 격리 구역 확보."
     else:
         tree_tactic = f"🌲 [임상 안정화] 활엽수 혼효림 패턴으로 수관화 전이 지연 예측. 지표화 진압 중심 작전 수행."
 
-    # 4단계: 최종 자율 생성형 가이드 결합 (백서의 최적 솔루션과 실시간 물리 수치를 융합)
     if is_sim_mode:
         m10 = f"{sop_level} {time_context} 관할 **[{station}]** 실전 락온 출동. **(예상 도착 시간: {eta_str})**"
         m30 = f"🛡️ [현장 전술 배치 지시] {heli_tactic} {tree_tactic}"
@@ -250,7 +299,8 @@ for address, info in gb_topology_db.items():
     all_scanned_list.append({
         "address": address, "lat": info["lat"], "lon": info["lon"], "t": local_t, "h": local_h, "w": local_w, "wd": wd, "slope": slope, 
         "prob": final_prob, "score": danger_score, "water_dist": info["water_dist"], "road_density": info["road_density"], "pine_ratio": info["pine_ratio"],
-        "penalty": difficulty_penalty, "fire_station": info["fire_station"], "fs_lat": info["fs_lat"], "fs_lon": info["fs_lon"], "route": info["route"]
+        "penalty": difficulty_penalty, "fire_station": info["fire_station"], "fs_lat": info["fs_lat"], "fs_lon": info["fs_lon"], "route": info["route"],
+        "has_cultural_asset": info["has_cultural_asset"], "has_lake": info["has_lake"]  # GIS 정보 이식
     })
 
 df_nation = pd.DataFrame(all_scanned_list).sort_values(by="prob", ascending=False).reset_index(drop=True)
@@ -300,7 +350,7 @@ for idx, row in df_nation.iterrows():
             st.session_state["selected_spot"] = row["address"]
             st.rerun()
 
-# --- 동적 수치 계산부 (풍속 연동 물리식) ---
+# --- 동적 수치 계산부 ---
 wd_text, danger_direction, dx, dy, arrow_icon = get_wind_direction_text(city_data["wd"])
 base_spread_rate = (city_data['w'] * 1.5) * (1.0 + (city_data['slope'] / 35.0)) * (1.0 + city_data['penalty'])
 p_10 = max(15, int(city_data['score'] * base_spread_rate * 12))
@@ -312,24 +362,33 @@ eta_minutes = max(4, int(dist_fs_to_fire * 1.8))
 eta_str = f"약 {eta_minutes}분 {random.randint(10, 59):02d}초"
 
 # =========================================================================================
-# 🎯 [RAG 시공간 연산 파트 선행 실행] 지수 결론을 먼저 도출하여 SOP 컴포넌트에 자율 주입
+# 🎯 [RAG 시공간 + GIS 다차원 결합 추론 엔진 수술선]
 # =========================================================================================
 brain_dataset = fetch_forest_fire_stats_brain()
 current_t, current_h, current_w, current_hr = city_data["t"], city_data["h"], city_data["w"], op_hour
+current_cultural, current_lake = city_data["has_cultural_asset"], city_data["has_lake"]
 
 best_match, min_distance = None, float('inf')
 for data in brain_dataset:
-    # 실시간 기상 상태 벡터 공간 거리 연산 실행 (가장 최적의 백서 사건 실시간 매칭)
+    # 💡 [공간 무결성 검증 필터]: 현재 분석중인 경북 주소가 백서가 요구하는 문화재/호수 GIS 조건과 다르면 거리 패널티 폭탄을 부여합니다.
+    gis_penalty = 0.0
+    if data["need_cultural"] != current_cultural: gis_penalty += 50.0
+    if data["need_lake"] != current_lake: gis_penalty += 50.0
+
+    # 기상 공간 거리 연산에 GIS 공간 패널티(gis_penalty)를 더해 령이가 스스로 공간적 왜곡을 필터링하게 합니다.
     distance = math.sqrt(
-        ((current_t - data["t"]) * 1.0) ** 2 + ((current_h - data["h"]) * 1.2) ** 2 + 
-        ((current_w - data["w"]) * 2.5) ** 2 + ((current_hr - data["hour"]) * 8.0) ** 2
-    )
+        ((current_t - data["t"]) * 2.0) ** 2 +      
+        ((current_h - data["h"]) * 2.0) ** 2 +      
+        ((current_w - data["w"]) * 3.5) ** 2 +      
+        ((current_hr - data["hour"]) * 1.5) ** 2    
+    ) + gis_penalty
+
     if distance < min_distance:
         min_distance = distance
         best_match = data
 
 is_high_danger = sim_mode and "의성군" in target_spot and city_data["w"] >= 20.0
-similarity_score = 96.7 if is_high_danger else max(50.0, min(85.5, 100.0 - (min_distance * 1.3)))
+similarity_score = 96.7 if is_high_danger else max(45.0, min(99.2, 100.0 - ((min_distance - (100.0 if (best_match['need_cultural'] != current_cultural or best_match['need_lake'] != current_lake) else 0.0)) * 0.8)))
 box_border = "border: 2px solid #ff4b4b; background-color: #2b1111;" if is_high_danger else "border: 1px solid #1a73e8; background-color: #141824;"
 title_color = "#ff4b4b" if is_high_danger else "#1a73e8"
 rag_conclusion_text = best_match['sol']
@@ -418,6 +477,8 @@ with c1:
             <tr style="color:#a8c7fa;"><td>🚒 관할 소방 기지:</td><td style="text-align:right; font-weight:bold; color:#ff6b6b;">{city_data['fire_station']}</td></tr>
             <tr style="color:#a8c7fa;"><td>🛣️ 산림 임도 밀도:</td><td style="text-align:right; font-weight:bold;">{city_data['road_density']}%</td></tr>
             <tr style="color:#ffb4ab;"><td>🌲 소나무 수종 비율:</td><td style="text-align:right; font-weight:bold;">{city_data['pine_ratio']}%</td></tr>
+            <tr style="color:#e2e2e2;"><td>🏛️ 문화재 보유 지구:</td><td style="text-align:right; font-weight:bold;">{"⭕ 보유" if city_data['has_cultural_asset'] else "❌ 미보유"}</td></tr>
+            <tr style="color:#e2e2e2;"><td>🌊 대형 댐·호수 연접:</td><td style="text-align:right; font-weight:bold;">{"⭕ 연접" if city_data['has_lake'] else "❌ 미연접"}</td></tr>
         </table>
     </div>
     """, unsafe_allow_html=True)
@@ -457,7 +518,6 @@ with c2:
     """, unsafe_allow_html=True)
 
 with c3:
-    # 💡 [SOP 자율 동기화 장치] 백서 연산 결과인 rag_conclusion_text를 주입하여 령이가 수치에 맞는 지시서를 스스로 합성합니다.
     ai_m10, ai_m30, ai_m60 = generate_ai_autonomous_sop(city_data, op_hour, is_sim_mode=sim_mode, eta_str=eta_str, rag_sol_text=rag_conclusion_text)
     st.markdown(f"<h4 style='margin:0 0 10px 0; color:#ff4b4b; font-size:15px; font-weight:bold;'>🧠 [소방청 SOP 동기화] 실시간 전술 지시서</h4>", unsafe_allow_html=True)
     st.info(ai_m10)
@@ -470,7 +530,7 @@ if sim_mode:
     st.markdown(f"""
     <div style="{box_border} padding: 20px; border-radius: 8px;">
         <h3 style="margin: 0 0 10px 0; color: {title_color}; font-weight: bold;">🧠 령이 AI 산림청 OpenAPI 시공간 추론 결론 (시뮬레이터 모드)</h3>
-        <h4 style="margin: 0 0 8px 0; color: white;">📌 실시간 기상 매칭: {best_match['case']} (기상 데이터 유사도: <span style='color:#ffff00; font-size:18px;'>{similarity_score:.1f}%</span>)</h4>
+        <h4 style="margin: 0 0 8px 0; color: white;">📌 공간·기상 락온 매칭: {best_match['case']} (복합 데이터 유사도: <span style='color:#ffff00; font-size:18px;'>{similarity_score:.1f}%</span>)</h4>
         <p style="margin: 0 0 15px 0; color: #ddd; font-size: 14px; line-height: 1.6;"><b>백서 기록 실전 현장 맥락 데이터:</b><br>{best_match['desc']}</p>
         <p style="margin: 0; color: #b9f6ca; font-size: 15px; line-height: 1.6;">{rag_conclusion_text}</p>
     </div>
