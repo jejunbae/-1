@@ -1,8 +1,9 @@
 streamlit
+langchain
+langchain-community
+langchain-openai
+langchain-text-splitters
+faiss-cpu
 pandas
 pydeck
-geopandas
-shapely
-pyproj
-scikit-learn
-joblib
+requests
