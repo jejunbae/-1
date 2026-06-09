@@ -74,6 +74,7 @@ def fetch_kma_grid_weather(nx, ny):
 # =========================================================================================
 # 🗂️ [하드코딩 0%] 외부 CSV에서 경북 전역 읍·면·동 데이터를 실시간 스트리밍
 # =========================================================================================
+# 🎯 [ValueError 빈칸 에러 폭파 버전] 엑셀에 빈 줄이나 공백이 있어도 무조건 패스하는 안전 로더
 @st.cache_data
 def load_gb_all_emd_database():
     csv_file = "gb_full_emd.csv"
@@ -81,27 +82,54 @@ def load_gb_all_emd_database():
         base_path = os.path.dirname(__file__) if "__file__" in locals() else "."
         csv_file = os.path.join(base_path, "gb_full_emd.csv")
     
-    df = pd.read_csv(csv_file, encoding="utf-8")
-    
+    try:
+        df = pd.read_csv(csv_file, encoding="utf-8")
+    except:
+        df = pd.read_csv(csv_file, encoding="cp949")
+        
     gb_spots = {}
     for _, row in df.iterrows():
-        # 경북 엑셀에 채워둔 위경도를 기반으로 지도상에 선을 그릴 수 있도록 자율 좌표 패스 생성
-        slon, slat, elon, elat = float(row["fs_lon"]), float(row["fs_lat"]), float(row["lon"]), float(row["lat"])
-        generated_route = [
-            [slon, slat],
-            [slon + (elon - slon) * 0.3, slat + (elat - slat) * 0.2],
-            [slon + (elon - slon) * 0.6, slat + (elat - slat) * 0.7],
-            [elon, elat]
-        ]
-        gb_spots[row["address"]] = {
-            "nx": int(row["nx"]), "ny": int(row["ny"]),
-            "slope": float(row["slope"]), "water_dist": float(row["water_dist"]),
-            "road_density": int(row["road_density"]), "pine_ratio": int(row["pine_ratio"]),
-            "fire_station": row["fire_station"], "fs_lat": slat, "fs_lon": slon,
-            "lat": elat, "lon": elon, "route": generated_route
-        }
+        # 💡 [핵심 방어선] 만약 주소나 nx, ny 칸이 비어있으면 에러 내지 말고 다음 줄로 그냥 넘어가라!
+        if pd.isna(row.get("address")) or pd.isna(row.get("nx")) or pd.isna(row.get("ny")):
+            continue
+            
+        try:
+            # 엑셀의 글자 주소와 좌표를 안전하게 가져오기
+            addr = str(row["address"]).strip()
+            
+            # 숫자로 바꿀 때 공백이나 에러가 나면 무시하도록 처리
+            nx_val = int(row["nx"])
+            ny_val = int(row["ny"])
+            elon = float(row["lon"])
+            elat = float(row["lat"])
+            slon = float(row["fs_lon"])
+            slat = float(row["fs_lat"])
+            
+            # 나머지 제원들도 안전하게 숫자로 변환 (없으면 기본값 대입)
+            slope_val = float(row.get("slope", 25.0))
+            water_val = float(row.get("water_dist", 2.5))
+            road_val = int(row.get("road_density", 35))
+            pine_val = int(row.get("pine_ratio", 75))
+            station_name = str(row.get("fire_station", "경북소방본부"))
+            
+            generated_route = [
+                [slon, slat],
+                [slon + (elon - slon) * 0.5, slat + (elat - slat) * 0.5],
+                [elon, elat]
+            ]
+            
+            gb_spots[addr] = {
+                "nx": nx_val, "ny": ny_val,
+                "slope": slope_val, "water_dist": water_val,
+                "road_density": road_val, "pine_ratio": pine_val,
+                "fire_station": station_name,
+                "fs_lat": slat, "fs_lon": slon, "lat": elat, "lon": elon, "route": generated_route
+            }
+        except:
+            # 줄 하나가 잘못되었어도 프로그램 전체가 멈추지 않게 방어
+            continue
+            
     return gb_spots
-
 # =========================================================================================
 # 🧠 [RAG 파이프라인] 대표님의 2023 동시다발 백서 TXT 메모장을 스스로 학습하는 AI 뇌세포
 # =========================================================================================
