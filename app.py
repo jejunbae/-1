@@ -16,7 +16,7 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 st.set_page_config(page_title="경북 산불 관제 AI 령이", page_icon="⚠️", layout="wide")
 
 # 🔑 OpenAI API 키 (대표님의 키를 여기에 바인딩하십시오)
-OPENAI_API_KEY = 69309efd849de167a2a68e2fc27331c01eb67888d72dd4a740419a33cf7d292e
+OPENAI_API_KEY = "69309efd849de167a2a68e2fc27331c01eb67888d72dd4a740419a33cf7d292e"
 
 API_KEY = "69309efd849de167a2a68e2fc27331c01eb67888d72dd4a740419a33cf7d292e"
 tz_kst = timezone(timedelta(hours=9))
